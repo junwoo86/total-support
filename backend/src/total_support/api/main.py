@@ -4,14 +4,19 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from total_support import __version__
 from total_support.api import collection, domains, keywords, logs, postings
 from total_support.config import get_settings
+from total_support.services.exceptions import (
+    DuplicateError,
+    InvalidPatternError,
+    NotFoundError,
+)
 
 API_PREFIX = "/api/grant"
 
@@ -28,6 +33,20 @@ def create_app() -> FastAPI:
         docs_url=f"{API_PREFIX}/docs",
         openapi_url=f"{API_PREFIX}/openapi.json",
     )
+
+    # ----- Service-layer 도메인 예외 → HTTP status 매핑 ------
+    # 라우터는 서비스 호출만 하고, 도메인 예외는 여기서 자동 변환된다.
+    @app.exception_handler(NotFoundError)
+    async def _handle_not_found(_req: Request, exc: NotFoundError):
+        return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+    @app.exception_handler(DuplicateError)
+    async def _handle_duplicate(_req: Request, exc: DuplicateError):
+        return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+    @app.exception_handler(InvalidPatternError)
+    async def _handle_invalid(_req: Request, exc: InvalidPatternError):
+        return JSONResponse(status_code=422, content={"detail": str(exc)})
 
     # CORS — G10: .env의 TS_CORS_ORIGINS로 환경별 분리.
     cors = get_settings().cors_origin_list or ["*"]
