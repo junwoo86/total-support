@@ -36,16 +36,21 @@ class Base(DeclarativeBase):
 
 # ============================================================
 # §4.1 ENUM 코드 집합
+# ------------------------------------------------------------
+# Python StrEnum 정의는 db/enums.py 에 있다. 여기서는 CHECK
+# constraint 가 쓰는 튜플 형태로 re-export 만 한다 (drift 방지).
 # ============================================================
-SOURCE_SITE_VALUES = ("BIZINFO", "IRIS", "SBA")
-AI_SUITABILITY_VALUES = ("HIGH", "NORMAL")
-REVIEW_STATUS_VALUES = ("UNREVIEWED", "EXCLUDED", "NEEDS_REVIEW", "IN_PROGRESS")
-POSTING_STATUS_VALUES = ("SCHEDULED", "ONGOING", "CLOSED")
-RUN_STATUS_VALUES = ("RUNNING", "OK", "WARN", "FAIL")
-TRIGGER_KIND_VALUES = ("SCHEDULE", "MANUAL")
-LOG_LEVEL_VALUES = ("INFO", "WARN", "ERROR")
-LOG_CATEGORY_VALUES = ("PARSE_PERIOD", "URL_TRUNCATED", "BACKFILL", "SCRAPER", "API")
-MATCH_MODE_VALUES = ("WORD_BOUNDARY", "EXACT_HANGUL", "SUBSTRING", "REGEX")
+from total_support.db.enums import (  # noqa: E402  re-export for migrations/models
+    AI_SUITABILITY_VALUES,
+    LOG_CATEGORY_VALUES,
+    LOG_LEVEL_VALUES,
+    MATCH_MODE_VALUES,
+    POSTING_STATUS_VALUES,
+    REVIEW_STATUS_VALUES,
+    RUN_STATUS_VALUES,
+    SOURCE_SITE_VALUES,
+    TRIGGER_KIND_VALUES,
+)
 
 
 def _check_in(col_name: str, values: tuple[str, ...]) -> CheckConstraint:

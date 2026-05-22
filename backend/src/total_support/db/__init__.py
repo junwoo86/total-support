@@ -5,6 +5,17 @@ from total_support.db.engine import (
     engine,
     get_session,
 )
+from total_support.db.enums import (
+    AiSuitability,
+    LogCategory,
+    LogLevel,
+    MatchMode,
+    PostingStatus,
+    ReviewStatus,
+    RunStatus,
+    SourceSite,
+    TriggerKind,
+)
 from total_support.db.models import (
     Base,
     GrantCollectionRun,
@@ -22,12 +33,14 @@ from total_support.db.tz import (
 )
 
 __all__ = [
+    # ORM models
     "Base",
     "GrantCollectionRun",
     "GrantDomain",
     "GrantKeyword",
     "GrantPosting",
     "GrantSystemLog",
+    # session/engine
     "KEYWORD_VERSION_SEQ_NAME",
     "SEOUL_TZ",
     "SessionLocal",
@@ -36,4 +49,14 @@ __all__ = [
     "get_session",
     "seoul_now_expr",
     "seoul_today_expr",
+    # ENUM types (StrEnum — drop-in str replacements)
+    "AiSuitability",
+    "LogCategory",
+    "LogLevel",
+    "MatchMode",
+    "PostingStatus",
+    "ReviewStatus",
+    "RunStatus",
+    "SourceSite",
+    "TriggerKind",
 ]
