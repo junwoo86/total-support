@@ -1,0 +1,10 @@
+/* ============================================================
+ * Total Support · Design System v2 entry
+ * Loaded as a single file from index.html; @imports the parts.
+ * ============================================================ */
+
+@import url('styles/01-base.css');
+@import url('styles/02-primitives.css');
+@import url('styles/03-layout.css');
+@import url('styles/04-overlays.css');
+@import url('styles/05-features.css');

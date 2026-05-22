@@ -1,0 +1,73 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "total-support-backend"
+version = "0.1.0"
+description = "지원사업 통합 수집 및 다중 분야 스크리닝 백엔드 (PRD v9.0)"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "BIOCOM" }]
+license = { text = "Proprietary" }
+
+# 본 모듈은 운영 DB 비침습 원칙(PRD §11)을 따른다.
+# tb_grant_* 5 테이블 + tb_grant_keyword_version_seq 시퀀스만 추가한다.
+dependencies = [
+  # ----- API -----
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.32",
+  "pydantic>=2.9",
+  "pydantic-settings>=2.6",
+  "python-dotenv>=1.0",
+  # ----- DB / Migration -----
+  # PRD §2.3.2: AT TIME ZONE 'Asia/Seoul' helper 사용. 세션 TZ 변경 금지.
+  "sqlalchemy>=2.0.36",
+  "alembic>=1.14",
+  "psycopg[binary]>=3.2",
+  # ----- Scraping -----
+  # PRD §2.1: BIZINFO=httpx+BS4, IRIS=httpx Form POST, SBA=Playwright
+  "httpx>=0.28",
+  "beautifulsoup4>=4.12",
+  "selectolax>=0.3.25",
+  "lxml>=5.3",
+  "playwright>=1.49",
+  # ----- HTML sanitize -----
+  # PRD §4.2 content_html: <script>/<iframe>/onclick 제거
+  "bleach>=6.2",
+  # ----- Jobs / Schedule -----
+  # PRD §10: Celery/RQ 워커 중 Celery 채택
+  "celery>=5.4",
+  "redis>=5.2",
+  # ----- Observability -----
+  "structlog>=24.4",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "freezegun>=1.5",
+  "respx>=0.21",
+  "ruff>=0.8",
+  "mypy>=1.13",
+]
+
+[project.scripts]
+ts-api = "total_support.api.main:run"
+ts-worker = "total_support.jobs.celery_app:worker_entry"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "N", "SIM"]
+ignore = ["E501"]  # line length는 formatter가 처리
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Generic Web Design System Specification</title>
+<style>
+  :root {
+    --ink: #111111;
+    --ink-strong: #000000;
+    --charcoal: #2a2a2a;
+    --slate: #555555;
+    --steel: #777777;
+    --stone: #999999;
+    --muted: #bbbbbb;
+    --canvas: #ffffff;
+    --surface: #f5f5f5;
+    --surface-soft: #fafafa;
+    --hairline: #e5e5e5;
+    --hairline-soft: #ececec;
+    --accent: #ff5a4e;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: 'DM Sans', 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    color: var(--charcoal);
+    background: var(--canvas);
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  .container {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 64px 32px 96px;
+  }
+  header.hero {
+    border-bottom: 1px solid var(--hairline);
+    padding-bottom: 40px;
+    margin-bottom: 48px;
+  }
+  header.hero .eyebrow {
+    font-size: 12px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--steel);
+    margin-bottom: 16px;
+  }
+  h1 {
+    font-size: 56px;
+    font-weight: 600;
+    line-height: 1.10;
+    letter-spacing: -1.5px;
+    color: var(--ink);
+    margin: 0 0 16px;
+  }
+  header.hero p.lede {
+    font-size: 18px;
+    line-height: 1.5;
+    color: var(--slate);
+    margin: 0;
+    max-width: 680px;
+  }
+  h2 {
+    font-size: 32px;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: -0.5px;
+    color: var(--ink);
+    margin: 64px 0 20px;
+    padding-top: 24px;
+    border-top: 1px solid var(--hairline-soft);
+  }
+  h3 {
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: var(--ink);
+    margin: 32px 0 12px;
+  }
+  h4 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ink);
+    margin: 20px 0 8px;
+  }
+  p { margin: 0 0 14px; }
+  ul, ol { margin: 0 0 14px; padding-left: 22px; }
+  li { margin-bottom: 6px; }
+  code {
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 13px;
+    background: var(--surface);
+    color: var(--ink);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  strong { color: var(--ink); font-weight: 600; }
+  blockquote {
+    margin: 16px 0;
+    padding: 12px 18px;
+    background: var(--surface);
+    border-left: 3px solid var(--ink);
+    font-size: 14px;
+    color: var(--charcoal);
+    border-radius: 0 6px 6px 0;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0 24px;
+    font-size: 14px;
+  }
+  thead th {
+    text-align: left;
+    background: var(--surface);
+    color: var(--steel);
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  tbody td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--hairline-soft);
+    color: var(--ink);
+    vertical-align: top;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  .toc {
+    background: var(--surface-soft);
+    border: 1px solid var(--hairline);
+    border-radius: 16px;
+    padding: 24px 28px;
+    margin-bottom: 56px;
+  }
+  .toc h2 {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--steel);
+    margin: 0 0 12px;
+    padding: 0;
+    border: none;
+  }
+  .toc ul { list-style: none; padding: 0; margin: 0; columns: 2; column-gap: 32px; }
+  .toc li { margin-bottom: 6px; font-size: 14px; break-inside: avoid; }
+  .toc a {
+    color: var(--ink);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.15s;
+  }
+  .toc a:hover { border-bottom-color: var(--ink); }
+  .swatch-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+    margin: 16px 0 24px;
+  }
+  .swatch {
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 12px;
+  }
+  .swatch .chip {
+    width: 100%;
+    height: 48px;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    border: 1px solid var(--hairline-soft);
+  }
+  .swatch .name { color: var(--ink); font-weight: 600; }
+  .swatch .token { color: var(--steel); font-family: ui-monospace, monospace; }
+  .do-dont {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 16px 0;
+  }
+  .do-dont .col {
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .do-dont .col.do { background: #f4fbf6; border-color: #cce8d6; }
+  .do-dont .col.dont { background: #fef5f4; border-color: #efd4d1; }
+  .do-dont h4 { margin-top: 0; }
+  footer {
+    margin-top: 80px;
+    padding-top: 24px;
+    border-top: 1px solid var(--hairline);
+    font-size: 13px;
+    color: var(--steel);
+  }
+  @media (max-width: 720px) {
+    .container { padding: 32px 20px 64px; }
+    h1 { font-size: 36px; letter-spacing: -1px; }
+    h2 { font-size: 24px; }
+    .toc ul { columns: 1; }
+    .do-dont { grid-template-columns: 1fr; }
+    table { font-size: 13px; }
+    thead th, tbody td { padding: 8px 10px; }
+  }
+  @media print {
+    body { font-size: 11pt; }
+    .toc { break-after: page; }
+    h2 { break-before: avoid; }
+    .container { padding: 20px; max-width: none; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header class="hero">
+  <div class="eyebrow">Design System Specification</div>
+  <h1>Generic Modern Web Design System</h1>
+  <p class="lede">범용 웹 페이지 및 제품군 페이지 개발에 사용할 수 있는 모듈형 디자인 시스템 명세. 스타크한 모노크롬 베이스 위에 카테고리별 채도 컬러 카드를 얹는 이중 정체성 패턴을 따른다.</p>
+</header>
+
+<nav class="toc">
+  <h2>목차</h2>
+  <ul>
+    <li><a href="#overview">1. Overview</a></li>
+    <li><a href="#colors">2. Colors</a></li>
+    <li><a href="#typography">3. Typography</a></li>
+    <li><a href="#layout">4. Layout</a></li>
+    <li><a href="#elevation">5. Elevation &amp; Depth</a></li>
+    <li><a href="#shapes">6. Shapes</a></li>
+    <li><a href="#components">7. Components</a></li>
+    <li><a href="#dos-donts">8. Do's and Don'ts</a></li>
+    <li><a href="#responsive">9. Responsive Behavior</a></li>
+    <li><a href="#iteration">10. Iteration Guide</a></li>
+    <li><a href="#gaps">11. Known Gaps</a></li>
+  </ul>
+</nav>
+
+<section id="overview">
+<h2>1. Overview</h2>
+<p>이 디자인 시스템은 <strong>모노크롬 베이스 + 채도 높은 카테고리 카드</strong>라는 이중 정체성으로 구성된다. 마케팅 표면과 플랫폼 페이지는 화이트 캔버스와 거의 블랙에 가까운 타이포그래피로 앵커되며, 보이스는 자신감 있고 기술적이며 에디토리얼하다. 그러나 각 제품/기능 카테고리는 고유 그라디언트 컬러 카드로 개성을 가진다 — 카테고리 A는 코랄, 카테고리 B는 마젠타, 카테고리 C는 블루, 카테고리 D는 퍼플처럼.</p>
+
+<p>단일 변동성 산세리프(DM Sans 권장, Inter 폴백)가 80px 헤로 디스플레이부터 12px 마이크로 라벨까지 모든 표면을 앵커한다. 버튼은 보편적으로 pill 형태(<code>rounded-full</code>)이며 명확한 2계층 체계를 따른다: 블랙 pill 프라이머리(지배적 CTA)와 아웃라인 pill 세컨더리. 카드는 두 패밀리로 분리된다: 채도 그라디언트 쇼케이스 카드(32px 코너)와 조용한 화이트 문서 카드(16px 코너).</p>
+
+<h3>핵심 특성</h3>
+<ul>
+  <li>스타크한 모노크롬 팔레트 — 블랙(<code>{colors.primary}</code>)과 화이트(<code>{colors.canvas}</code>) — 채도 그라디언트 카테고리 카드로만 깨짐</li>
+  <li>카테고리별 컬러 인코딩: 각 제품/섹션 라인이 고유 브랜드 컬러를 가짐</li>
+  <li>시스템 전체에 단일 타입페이스 — DM Sans 또는 Inter</li>
+  <li>모든 버튼, pill 탭, 뱃지에 <code>{rounded.full}</code> 적용</li>
+  <li>헤로 타이포그래피는 1.10 라인하이트 + -2px 자간으로 임팩트 확보</li>
+  <li>문서 표면은 3컬럼 레이아웃: 좌측 사이드바 / 중앙 본문 / 우측 TOC</li>
+  <li>상단 네비게이션 위에 블랙 프로모 배너 사용 가능 (시간 제한 이벤트용)</li>
+</ul>
+</section>
+
+<section id="colors">
+<h2>2. Colors</h2>
+
+<h3>2.1 Accent & Category Colors</h3>
+<p>카테고리/제품 라인별 컬러 인코딩. 본문 텍스트나 일반 표면에 사용 금지. 오직 카테고리 정체성 모먼트에만 사용.</p>
+
+<div class="swatch-grid">
+  <div class="swatch"><div class="chip" style="background:#ff5a4e"></div><div class="name">Accent Coral</div><div class="token">{colors.accent-coral}</div></div>
+  <div class="swatch"><div class="chip" style="background:#e83e8c"></div><div class="name">Accent Magenta</div><div class="token">{colors.accent-magenta}</div></div>
+  <div class="swatch"><div class="chip" style="background:#2563eb"></div><div class="name">Accent Blue</div><div class="token">{colors.accent-blue}</div></div>
+  <div class="swatch"><div class="chip" style="background:#1e40af"></div><div class="name">Accent Blue Deep</div><div class="token">{colors.accent-blue-deep}</div></div>
+  <div class="swatch"><div class="chip" style="background:#1d4ed8"></div><div class="name">Accent Blue 700</div><div class="token">{colors.accent-blue-700}</div></div>
+  <div class="swatch"><div class="chip" style="background:#06b6d4"></div><div class="name">Accent Cyan</div><div class="token">{colors.accent-cyan}</div></div>
+  <div class="swatch"><div class="chip" style="background:#bfdbfe"></div><div class="name">Accent Blue 200</div><div class="token">{colors.accent-blue-200}</div></div>
+  <div class="swatch"><div class="chip" style="background:#7c3aed"></div><div class="name">Accent Purple</div><div class="token">{colors.accent-purple}</div></div>
+</div>
+
+<h3>2.2 Surface</h3>
+<div class="swatch-grid">
+  <div class="swatch"><div class="chip" style="background:#ffffff"></div><div class="name">Canvas (White)</div><div class="token">{colors.canvas}</div></div>
+  <div class="swatch"><div class="chip" style="background:#f5f5f5"></div><div class="name">Surface</div><div class="token">{colors.surface}</div></div>
+  <div class="swatch"><div class="chip" style="background:#fafafa"></div><div class="name">Surface Soft</div><div class="token">{colors.surface-soft}</div></div>
+  <div class="swatch"><div class="chip" style="background:#e5e5e5"></div><div class="name">Hairline</div><div class="token">{colors.hairline}</div></div>
+  <div class="swatch"><div class="chip" style="background:#ececec"></div><div class="name">Hairline Soft</div><div class="token">{colors.hairline-soft}</div></div>
+</div>
+
+<h3>2.3 Text / Ink</h3>
+<div class="swatch-grid">
+  <div class="swatch"><div class="chip" style="background:#111111"></div><div class="name">Ink (Primary)</div><div class="token">{colors.ink}</div></div>
+  <div class="swatch"><div class="chip" style="background:#000000"></div><div class="name">Ink Strong</div><div class="token">{colors.ink-strong}</div></div>
+  <div class="swatch"><div class="chip" style="background:#2a2a2a"></div><div class="name">Charcoal</div><div class="token">{colors.charcoal}</div></div>
+  <div class="swatch"><div class="chip" style="background:#555555"></div><div class="name">Slate</div><div class="token">{colors.slate}</div></div>
+  <div class="swatch"><div class="chip" style="background:#777777"></div><div class="name">Steel</div><div class="token">{colors.steel}</div></div>
+  <div class="swatch"><div class="chip" style="background:#999999"></div><div class="name">Stone</div><div class="token">{colors.stone}</div></div>
+  <div class="swatch"><div class="chip" style="background:#bbbbbb"></div><div class="name">Muted</div><div class="token">{colors.muted}</div></div>
+</div>
+
+<h3>2.4 Semantic</h3>
+<ul>
+  <li><strong>Success BG</strong> <code>{colors.success-bg}</code>: 옅은 그린 워시 (확인 뱃지, 성공 상태)</li>
+  <li><strong>Success Text</strong> <code>{colors.success-text}</code>: 딥 그린 잉크 (뱃지 라벨)</li>
+  <li><strong>Error</strong>: <code>#d45656</code> 톤 (입력 에러 보더); 시스템 최상위 토큰으로 노출하지 않고 컴포넌트 레벨에서 사용</li>
+</ul>
+</section>
+
+<section id="typography">
+<h2>3. Typography</h2>
+
+<h3>3.1 Font Family</h3>
+<p><strong>DM Sans</strong>(주력): 변동성 산세리프. 모든 표면, 모든 역할에 사용. 폴백: Inter, Helvetica Neue, Helvetica, Arial.</p>
+<p>이 타입페이스는 80px 헤로 디스플레이(-2px 자간으로 매거진 급 타이트함 구현)부터 12px 마이크로 라벨까지 깔끔하게 스케일링된다. 이탤릭 변형은 사용하지 않으며 — 강조는 웨이트(500/600/700)로 처리한다.</p>
+
+<h3>3.2 Hierarchy</h3>
+<table>
+<thead><tr><th>Token</th><th>Size</th><th>Weight</th><th>Line Height</th><th>Letter Spacing</th><th>Use</th></tr></thead>
+<tbody>
+<tr><td><code>{typography.hero-display}</code></td><td>80px</td><td>600</td><td>1.10</td><td>-2px</td><td>홈페이지 히어로</td></tr>
+<tr><td><code>{typography.display-lg}</code></td><td>56px</td><td>600</td><td>1.10</td><td>-1.5px</td><td>섹션 오프너, 주요 페이지 헤로</td></tr>
+<tr><td><code>{typography.heading-lg}</code></td><td>40px</td><td>600</td><td>1.20</td><td>-1px</td><td>서브 페이지 헤드라인</td></tr>
+<tr><td><code>{typography.heading-md}</code></td><td>32px</td><td>600</td><td>1.25</td><td>-0.5px</td><td>섹션 헤더</td></tr>
+<tr><td><code>{typography.heading-sm}</code></td><td>24px</td><td>600</td><td>1.30</td><td>0</td><td>카드 타이틀, 피처 헤더</td></tr>
+<tr><td><code>{typography.card-title}</code></td><td>20px</td><td>600</td><td>1.40</td><td>0</td><td>제품 카드 타이틀</td></tr>
+<tr><td><code>{typography.subtitle}</code></td><td>18px</td><td>500</td><td>1.50</td><td>0</td><td>섹션 서브타이틀, 리드 본문</td></tr>
+<tr><td><code>{typography.body-md}</code></td><td>16px</td><td>400</td><td>1.50</td><td>0</td><td>본문 텍스트</td></tr>
+<tr><td><code>{typography.body-md-bold}</code></td><td>16px</td><td>700</td><td>1.50</td><td>0</td><td>본문 강조</td></tr>
+<tr><td><code>{typography.body-sm}</code></td><td>14px</td><td>400</td><td>1.50</td><td>0</td><td>2차 본문, 테이블 셀, 네비</td></tr>
+<tr><td><code>{typography.body-sm-medium}</code></td><td>14px</td><td>500</td><td>1.50</td><td>0</td><td>활성 사이드바 네비, 버튼 라벨</td></tr>
+<tr><td><code>{typography.caption}</code></td><td>13px</td><td>400</td><td>1.70</td><td>0</td><td>문서 캡션, 작은 글씨</td></tr>
+<tr><td><code>{typography.caption-bold}</code></td><td>13px</td><td>600</td><td>1.50</td><td>0</td><td>뱃지 라벨, 테이블 헤더</td></tr>
+<tr><td><code>{typography.micro}</code></td><td>12px</td><td>400</td><td>1.50</td><td>0</td><td>풋터 마이크로카피, 칩 라벨</td></tr>
+<tr><td><code>{typography.button-md}</code></td><td>14px</td><td>600</td><td>1.40</td><td>0</td><td>Pill 버튼 라벨</td></tr>
+</tbody>
+</table>
+
+<h3>3.3 Principles</h3>
+<ul>
+  <li><strong>타이트한 헤로 leading</strong>(1.10)과 공격적인 음수 자간을 디스플레이 사이즈에 적용 — 매거진급 타이포그래피 구현</li>
+  <li><strong>여유로운 본문 leading</strong>(1.50) — 긴 문서 가독성 확보; 캡션은 1.70까지 확장</li>
+  <li><strong>웨이트 디시플린</strong>: 400(본문), 500(중간 강조), 600(헤딩/버튼), 700(인라인 강조). 더 무거운 웨이트는 사용하지 않음</li>
+  <li><strong>단일 타입페이스</strong> 전략 — 다른 산세리프와 혼용 금지. 코드 샘플은 시스템 모노스페이스 폴백 사용</li>
+</ul>
+</section>
+
+<section id="layout">
+<h2>4. Layout</h2>
+
+<h3>4.1 Spacing System</h3>
+<ul>
+  <li><strong>Base unit</strong>: 4px (8px 주력 증가 단위)</li>
+  <li><strong>Tokens</strong>: <code>{spacing.xxs}</code> (4px) · <code>{spacing.xs}</code> (8px) · <code>{spacing.sm}</code> (12px) · <code>{spacing.md}</code> (16px) · <code>{spacing.lg}</code> (20px) · <code>{spacing.xl}</code> (24px) · <code>{spacing.xxl}</code> (32px) · <code>{spacing.xxxl}</code> (40px) · <code>{spacing.section-sm}</code> (48px) · <code>{spacing.section}</code> (64px) · <code>{spacing.section-lg}</code> (80px) · <code>{spacing.hero}</code> (96px)</li>
+  <li><strong>섹션 리듬</strong>: 마케팅 페이지는 어보브폴드 <code>{spacing.hero}</code>(96px), 이후 <code>{spacing.section-lg}</code>(80px); 문서는 <code>{spacing.section}</code>(64px)로 타이트하게; 테이블 로우는 <code>{spacing.md}</code>(16px)로 압축</li>
+  <li><strong>카드 내부 패딩</strong>: 채도 카드는 <code>{spacing.xxl}</code>(32px); 문서 카드는 <code>{spacing.lg}–{spacing.xl}</code>(20–24px); 프로모 스트립은 <code>{spacing.section}</code>(64px)까지 확장</li>
+</ul>
+
+<h3>4.2 Grid & Container</h3>
+<ul>
+  <li>마케팅 페이지: 1280px 최대 너비, 32px 거터</li>
+  <li>홈페이지 카테고리 매트릭스: 32px 라운드 그라디언트 카드 4컬럼 행, 각 카드 ~280–320px 너비</li>
+  <li>제품 매트릭스(아래): 16px 라운드 화이트 카드 4컬럼 그리드</li>
+  <li>문서 표면: 3컬럼 — 좌측 사이드바(~220px) / 중앙 본문(~720px 최대) / 우측 TOC(~180px). 1024px 이하에서 드로어로 접힘</li>
+  <li>가격/플랜 페이지: 2컬럼 탭 위에 3컬럼 티어 카드 그리드</li>
+</ul>
+
+<h3>4.3 Whitespace Philosophy</h3>
+<p>마케팅 페이지는 제품 사진과 컬러 카드에 넉넉한 호흡을 제공한다 — <code>{spacing.hero}</code>(96px)는 80px 헤로 디스플레이를 위한 시각적 산소를 만든다. 문서 내부에서는 화이트스페이스를 급격히 타이트하게 가져간다: 섹션 갭은 <code>{spacing.xxl}</code>(32px)로 떨어지고, 테이블 로우는 <code>{spacing.md}</code>(16px)로 압축되며, 사이드바 네비는 <code>{spacing.xs}</code>(8px) 수직 리듬을 사용한다.</p>
+</section>
+
+<section id="elevation">
+<h2>5. Elevation &amp; Depth</h2>
+<p>시스템은 주로 플랫하다. Elevation은 고정 패널, 드롭다운, 드물게 떠 있는 CTA에만 사용된다.</p>
+
+<table>
+<thead><tr><th>Level</th><th>Treatment</th><th>Use</th></tr></thead>
+<tbody>
+<tr><td>0 (flat)</td><td>그림자 없음; <code>{colors.hairline}</code> 보더</td><td>기본 카드, 테이블 로우, 폼 입력</td></tr>
+<tr><td>1 (subtle)</td><td><code>rgba(0,0,0,0.04) 0 1px 2px 0</code></td><td>호버 엘리베이션 타일</td></tr>
+<tr><td>2 (card)</td><td><code>rgba(0,0,0,0.08) 0 4px 6px 0</code></td><td>표준 피처 카드, 드롭다운</td></tr>
+<tr><td>3 (atmospheric)</td><td><code>rgba(0,0,0,0.08) 0 0 22px 0</code></td><td>피처드 카드에 디퓨즈 글로우</td></tr>
+<tr><td>4 (modal)</td><td><code>rgba(36,36,36,0.08) 0 12px 16px -4px</code></td><td>모달, 확인 다이얼로그, 스티키 패널</td></tr>
+</tbody>
+</table>
+
+<h3>5.1 Decorative Depth</h3>
+<ul>
+  <li>채도 그라디언트 카드는 내부 래디얼 그라디언트와 실루엣 이미지로 자체 깊이 표현 — 그림자 불필요</li>
+  <li>퍼플 테마 카드 아래에 브랜드 톤 그림자(<code>rgba(44, 30, 116, 0.16) 0 0 15px</code>)로 미묘한 앰비언트 리프트 부여 가능</li>
+</ul>
+</section>
+
+<section id="shapes">
+<h2>6. Shapes</h2>
+
+<h3>6.1 Border Radius Scale</h3>
+<table>
+<thead><tr><th>Token</th><th>Value</th><th>Use</th></tr></thead>
+<tbody>
+<tr><td><code>{rounded.xs}</code></td><td>4px</td><td>코드 칩, 마이크로 컨트롤</td></tr>
+<tr><td><code>{rounded.sm}</code></td><td>6px</td><td>컴팩트 컨트롤, 테이블 셀</td></tr>
+<tr><td><code>{rounded.md}</code></td><td>8px</td><td>입력, 세컨더리 버튼, 서치 pill</td></tr>
+<tr><td><code>{rounded.lg}</code></td><td>12px</td><td>문서 카드, 추천 타일</td></tr>
+<tr><td><code>{rounded.xl}</code></td><td>16px</td><td>표준 피처 카드, 제품 매트릭스 타일</td></tr>
+<tr><td><code>{rounded.xxl}</code></td><td>20px</td><td>대형 피처 패널</td></tr>
+<tr><td><code>{rounded.xxxl}</code></td><td>24px</td><td>피처 변형 타일</td></tr>
+<tr><td><code>{rounded.hero}</code></td><td>32px</td><td>채도 그라디언트 카드, 프로모 CTA 스트립</td></tr>
+<tr><td><code>{rounded.full}</code></td><td>9999px</td><td>모든 버튼, 모든 pill 탭, 뱃지</td></tr>
+</tbody>
+</table>
+
+<h3>6.2 Photography Geometry</h3>
+<ul>
+  <li>채도 카드는 32px 코너 — 화이트 카드(16px)와 의도적 대비. 이 두 배 라디우스가 "이건 피처드 모먼트다"라는 시각 시그니처</li>
+  <li>아바타 원은 <code>{rounded.full}</code> — 완벽한 원</li>
+</ul>
+</section>
+
+<section id="components">
+<h2>7. Components</h2>
+
+<blockquote>No-hover 정책에 따라 호버 상태는 명세하지 않음. Default와 pressed/active 상태만 다룬다.</blockquote>
+
+<h3>7.1 Buttons</h3>
+
+<h4><code>button-primary</code> — 블랙 pill 프라이머리 CTA</h4>
+<ul>
+  <li>Background <code>{colors.primary}</code>, text <code>{colors.on-primary}</code>, typography <code>{typography.button-md}</code>, padding <code>11px 24px</code>, rounded <code>{rounded.full}</code></li>
+  <li>Pressed: <code>button-primary-pressed</code> — <code>{colors.charcoal}</code>로 리프트</li>
+  <li>Disabled: <code>button-primary-disabled</code> — <code>{colors.hairline}</code> bg, <code>{colors.muted}</code> text</li>
+</ul>
+
+<h4><code>button-secondary</code> — 아웃라인 pill 세컨더리</h4>
+<ul>
+  <li>Background transparent, text <code>{colors.ink}</code>, border <code>1px solid {colors.ink}</code>, padding <code>11px 24px</code>, rounded <code>{rounded.full}</code></li>
+</ul>
+
+<h4><code>button-tertiary</code> — 화이트 fill pill (서드 옵션)</h4>
+<ul>
+  <li>Background <code>{colors.canvas}</code>, text <code>{colors.ink}</code>, border <code>1px solid {colors.hairline}</code>, padding <code>11px 24px</code>, rounded <code>{rounded.full}</code></li>
+</ul>
+
+<h4><code>button-link</code> — 인라인 텍스트 링크</h4>
+<ul>
+  <li>Background transparent, text <code>{colors.ink}</code>, typography <code>{typography.body-sm-medium}</code>, padding <code>8px 0</code>. 활성화 시 언더라인</li>
+</ul>
+
+<h4><code>button-icon-circular</code> — 36×36px 원형 유틸리티 버튼</h4>
+<ul>
+  <li>Background <code>{colors.canvas}</code>, border <code>1px solid {colors.hairline}</code>, rounded <code>{rounded.full}</code>. 캐러셀 화살표, 공유, 복사 등</li>
+</ul>
+
+<h3>7.2 Category Cards (채도 카드)</h3>
+<p>각 카테고리/제품 라인에 1개의 시그니처 컬러 카드를 할당한다. 컬러는 프로젝트별로 카테고리 의미에 맞게 매핑.</p>
+
+<h4><code>category-card-coral</code></h4>
+<ul><li>Background <code>{colors.accent-coral}</code>, text <code>{colors.on-dark}</code>, rounded <code>{rounded.hero}</code>(32px), padding <code>{spacing.xxl}</code></li></ul>
+
+<h4><code>category-card-magenta</code></h4>
+<ul><li>Background <code>{colors.accent-magenta}</code>, text <code>{colors.on-dark}</code>, rounded <code>{rounded.hero}</code>, padding <code>{spacing.xxl}</code></li></ul>
+
+<h4><code>category-card-blue</code></h4>
+<ul><li>Background <code>{colors.accent-blue}</code>, text <code>{colors.on-dark}</code>, rounded <code>{rounded.hero}</code>, padding <code>{spacing.xxl}</code></li></ul>
+
+<h4><code>category-card-purple</code></h4>
+<ul><li>Background <code>{colors.accent-purple}</code>, text <code>{colors.on-dark}</code>, rounded <code>{rounded.hero}</code>, padding <code>{spacing.xxl}</code></li></ul>
+
+<h4><code>category-card-photo</code> — 다크 포트레이트 카드</h4>
+<ul><li>Background <code>{colors.primary}</code>(블랙 + 오버레이 사진), text <code>{colors.on-dark}</code>, rounded <code>{rounded.hero}</code>, padding <code>{spacing.xxl}</code></li></ul>
+
+<h3>7.3 Cards &amp; Containers</h3>
+
+<h4><code>card-base</code> — 표준 문서/피처 카드</h4>
+<ul><li>Background <code>{colors.canvas}</code>, rounded <code>{rounded.xl}</code>, padding <code>{spacing.xl}</code>, border <code>1px solid {colors.hairline}</code></li></ul>
+
+<h4><code>card-feature</code> — 그레이 배경 피처 패널</h4>
+<ul><li>Background <code>{colors.surface}</code>, rounded <code>{rounded.xl}</code>, padding <code>{spacing.xxl}</code></li></ul>
+
+<h4><code>card-recommendation</code> — "추천 읽기" 타일</h4>
+<ul><li>Background <code>{colors.canvas}</code>, rounded <code>{rounded.lg}</code>, padding <code>{spacing.lg}</code>, border <code>1px solid {colors.hairline}</code></li></ul>
+
+<h4><code>promo-cta-card</code> — 채도 프로모 스트립</h4>
+<ul><li>Background <code>{colors.accent-coral}</code>(또는 캠페인 컬러), text <code>{colors.on-dark}</code>, rounded <code>{rounded.hero}</code>, padding <code>{spacing.section}</code>. 임베디드 버튼은 <code>button-tertiary</code>(화이트 pill) 사용</li></ul>
+
+<h4><code>product-tile</code> — 매트릭스 그리드의 화이트 카드</h4>
+<ul><li>Background <code>{colors.canvas}</code>, rounded <code>{rounded.xxxl}</code>, padding <code>{spacing.xl}</code>, border <code>1px solid {colors.hairline}</code>. 상단 아이콘/일러스트, 타이틀 <code>{typography.card-title}</code>, 설명 <code>{typography.body-sm}</code></li></ul>
+
+<h3>7.4 Inputs &amp; Forms</h3>
+
+<h4><code>text-input</code> — 표준 텍스트 필드</h4>
+<ul><li>Background <code>{colors.canvas}</code>, text <code>{colors.ink}</code>, border <code>1px solid {colors.hairline}</code>, rounded <code>{rounded.md}</code>, padding <code>{spacing.sm} {spacing.md}</code>, height 40px</li></ul>
+
+<h4><code>text-input-focused</code></h4>
+<ul><li>Border switches to <code>2px solid {colors.accent-blue-deep}</code></li></ul>
+
+<h4><code>text-input-error</code></h4>
+<ul><li>Border <code>1px solid #d45656</code>; 에러 라벨은 동일 레드 톤 <code>{typography.body-sm}</code></li></ul>
+
+<h4><code>search-pill</code> — 문서 상단 서치 필드</h4>
+<ul><li>Background <code>{colors.surface}</code>, text <code>{colors.steel}</code>, typography <code>{typography.body-sm}</code>, rounded <code>{rounded.md}</code>, height 36px, border <code>1px solid {colors.hairline}</code></li></ul>
+
+<h3>7.5 Tabs</h3>
+
+<h4><code>segmented-tab</code> + <code>segmented-tab-active</code> — 언더라인 스타일</h4>
+<ul>
+  <li>Inactive: text <code>{colors.steel}</code>, transparent bg, padding <code>{spacing.md} {spacing.lg}</code></li>
+  <li>Active: text <code>{colors.ink}</code>, 2px bottom border <code>{colors.ink}</code></li>
+</ul>
+
+<h4><code>pill-tab</code> + <code>pill-tab-active</code> — Pill 스타일 (가격/플랜 탭)</h4>
+<ul>
+  <li>Inactive: bg <code>{colors.canvas}</code>, text <code>{colors.steel}</code>, border <code>1px solid {colors.hairline}</code>, padding <code>{spacing.xs} {spacing.md}</code>, rounded <code>{rounded.full}</code></li>
+  <li>Active: bg <code>{colors.primary}</code>, text <code>{colors.on-primary}</code>, border 없음</li>
+</ul>
+
+<h3>7.6 Badges &amp; Status</h3>
+
+<h4><code>badge-success</code></h4>
+<ul><li>Bg <code>{colors.success-bg}</code>, text <code>{colors.success-text}</code>, typography <code>{typography.caption-bold}</code>, rounded <code>{rounded.full}</code>, padding <code>4px 10px</code></li></ul>
+
+<h4><code>badge-new</code> — 신규/라이브 pill</h4>
+<ul><li>Bg <code>{colors.accent-coral}</code>, text <code>{colors.on-dark}</code>, typography <code>{typography.caption-bold}</code>, rounded <code>{rounded.full}</code>, padding <code>4px 10px</code></li></ul>
+
+<h4><code>badge-beta</code> — 옅은 블루 정보 pill</h4>
+<ul><li>Bg <code>{colors.accent-blue-200}</code>, text <code>{colors.accent-blue-deep}</code>, typography <code>{typography.caption-bold}</code>, rounded <code>{rounded.full}</code>, padding <code>4px 10px</code></li></ul>
+
+<h4><code>badge-code</code> — 인라인 코드 칩</h4>
+<ul><li>Bg <code>{colors.accent-blue-200}</code>, text <code>{colors.accent-blue-deep}</code>, typography <code>{typography.caption-bold}</code>, rounded <code>{rounded.sm}</code>, padding <code>2px 6px</code></li></ul>
+
+<h4><code>promo-banner</code> — 상단 네비 위 스티키 프로모 스트립</h4>
+<ul><li>Bg <code>{colors.primary}</code>, text <code>{colors.on-primary}</code>, typography <code>{typography.body-sm-medium}</code>, padding <code>{spacing.sm} {spacing.lg}</code></li></ul>
+
+<h3>7.7 Data Tables</h3>
+
+<h4><code>data-table</code></h4>
+<ul><li>Bg <code>{colors.canvas}</code>, text <code>{colors.ink}</code>, typography <code>{typography.body-sm}</code>, rounded <code>{rounded.md}</code>, border <code>1px solid {colors.hairline}</code></li></ul>
+
+<h4><code>data-table-header</code></h4>
+<ul><li>Bg <code>{colors.surface}</code>, text <code>{colors.steel}</code>, typography <code>{typography.caption-bold}</code>, padding <code>{spacing.sm} {spacing.md}</code></li></ul>
+
+<h4><code>data-table-row</code></h4>
+<ul><li>Bg <code>{colors.canvas}</code>, text <code>{colors.ink}</code>, padding <code>{spacing.md}</code>, bottom border <code>1px solid {colors.hairline-soft}</code></li></ul>
+
+<h3>7.8 Navigation</h3>
+
+<h4>Top Navigation (Marketing)</h4>
+<ul>
+  <li>Bg <code>{colors.canvas}</code>, height ~64px, bottom border <code>1px solid {colors.hairline-soft}</code></li>
+  <li>좌측: 워드마크 + 수평 링크 리스트. 우측: 블랙 pill 프라이머리 CTA + 아웃라인 pill 세컨더리</li>
+</ul>
+
+<h4>Top Navigation (Documentation/Platform)</h4>
+<ul><li>Bg <code>{colors.canvas}</code>, height ~56px, 중앙 search-pill + 우측 계정/업그레이드 CTA</li></ul>
+
+<h4><code>sidebar-nav-item</code> + <code>sidebar-nav-item-active</code></h4>
+<ul>
+  <li>Inactive: bg transparent, text <code>{colors.charcoal}</code>, typography <code>{typography.body-sm}</code>, rounded <code>{rounded.sm}</code>, padding <code>{spacing.xs} {spacing.md}</code></li>
+  <li>Active: bg <code>{colors.surface}</code>, text <code>{colors.ink}</code>, typography <code>{typography.body-sm-medium}</code></li>
+</ul>
+
+<h4><code>doc-toc-item</code></h4>
+<ul><li>Bg transparent, text <code>{colors.steel}</code>, typography <code>{typography.body-sm}</code>, padding <code>{spacing.xs} 0</code>. 활성: <code>{colors.ink}</code></li></ul>
+
+<h3>7.9 Signature Components</h3>
+
+<h4><code>hero-band-marketing</code></h4>
+<p>센터 정렬 헤로 — 80px 디스플레이 + 듀얼 CTA 페어. 헤드라인 <code>{typography.hero-display}</code> <code>{colors.ink}</code>, 서브타이틀 <code>{typography.subtitle}</code> <code>{colors.steel}</code>, 버튼 행(<code>button-primary</code> + <code>button-secondary</code>).</p>
+
+<h4><code>category-matrix-grid</code></h4>
+<p>채도 그라디언트 카드의 4컬럼 수평 행. 각 타일은 <code>category-card-*</code> 변형 중 하나. 카드 타이틀 <code>{typography.display-lg}</code> 또는 <code>{typography.heading-lg}</code>. 카드 높이 균일(~360–400px). 모바일에서 수평 스크롤.</p>
+
+<h4><code>product-matrix-grid</code></h4>
+<p>채도 매트릭스 아래의 화이트 제품 타일 4컬럼 그리드. 각 타일은 <code>product-tile</code> 크롬. 상단 100px 일러스트 존, 타이틀 <code>{typography.card-title}</code>, 설명 <code>{typography.body-sm}</code> <code>{colors.steel}</code>.</p>
+
+<h4><code>docs-prose-block</code></h4>
+<p>문서 메인 콘텐츠. Max-width ~720px, 센터 정렬. 본문 <code>{typography.body-md}</code> <code>{colors.charcoal}</code> line-height 1.6. 인라인 코드: 모노스페이스 폴백 + <code>{colors.surface}</code> bg + <code>{rounded.xs}</code>.</p>
+
+<h4><code>stat-row</code></h4>
+<p>스탯 스트립 — 4개 셀, 각 셀에 큰 숫자 <code>{typography.heading-lg}</code> <code>{colors.ink}</code> + 라벨 <code>{typography.body-sm}</code> <code>{colors.steel}</code>.</p>
+
+<h4><code>footer-region</code></h4>
+<ul>
+  <li>Bg <code>{colors.footer-bg}</code>(다크), padding <code>{spacing.section} {spacing.xxl}</code></li>
+  <li>상단: 워드마크/태그라인 + 소셜 아이콘</li>
+  <li>본문: 4컬럼 링크 그리드. 섹션 헤더 <code>{typography.body-sm-medium}</code> <code>{colors.on-dark}</code></li>
+</ul>
+
+<h4><code>footer-link</code></h4>
+<ul><li>Bg transparent, text <code>{colors.muted}</code>, typography <code>{typography.body-sm}</code>, padding <code>{spacing.xxs} 0</code></li></ul>
+</section>
+
+<section id="dos-donts">
+<h2>8. Do's and Don'ts</h2>
+<div class="do-dont">
+  <div class="col do">
+    <h4>✅ Do</h4>
+    <ul>
+      <li><code>{colors.primary}</code>(블랙)을 지배적 CTA로 사용 — 가장 인식 가능한 인터랙티브 요소</li>
+      <li>카테고리 컬러(<code>{colors.accent-coral}</code>, <code>{colors.accent-magenta}</code>, <code>{colors.accent-blue}</code>, <code>{colors.accent-purple}</code>)는 카테고리 정체성 모먼트에만 사용</li>
+      <li><code>{rounded.hero}</code>(32px) 채도 카드와 <code>{rounded.xl}</code>(16px) 화이트 카드를 같은 뷰포트에 페어링 — 라디우스 대비가 시각 시그니처</li>
+      <li>모든 버튼, pill 탭, 뱃지에 <code>{rounded.full}</code> 적용</li>
+      <li>헤로 디스플레이는 <code>{typography.hero-display}</code>(80px) + -2px 자간 사용 — leading/자간 타협 금지</li>
+      <li>각 제품/카테고리 라인을 별개의 컬러 정체성으로 다루기 — 자유 선택이 아닌 시스템 할당</li>
+    </ul>
+  </div>
+  <div class="col dont">
+    <h4>❌ Don't</h4>
+    <ul>
+      <li>카테고리 컬러를 본문 텍스트나 대형 표면에 사용하지 말 것 — 의미가 희석됨</li>
+      <li>버튼 코너를 <code>{rounded.full}</code> 미만으로 부드럽게 만들지 말 것 — Pill은 시스템 시그니처</li>
+      <li>두 번째 디스플레이 타입페이스 도입 금지 — 단일 타입페이스가 모든 역할 담당</li>
+      <li>헤로 leading을 1.10 미만으로 줄이지 말 것</li>
+      <li>화이트 카드에 강한 그림자 적용 금지 — flat + border가 문서 기본값</li>
+      <li>표준 버튼에 그라디언트 배경 적용 금지 — 그라디언트는 카테고리 카드 정체성에만</li>
+    </ul>
+  </div>
+</div>
+</section>
+
+<section id="responsive">
+<h2>9. Responsive Behavior</h2>
+
+<h3>9.1 Breakpoints</h3>
+<table>
+<thead><tr><th>Name</th><th>Width</th><th>Key Changes</th></tr></thead>
+<tbody>
+<tr><td>Mobile (small)</td><td>&lt; 480px</td><td>싱글 컬럼. 헤로 40px. Pill 네비 햄버거. 매트릭스 수평 스크롤. 풋터 1컬럼 아코디언</td></tr>
+<tr><td>Mobile (large)</td><td>480 – 767px</td><td>제품 매트릭스 2-up</td></tr>
+<tr><td>Tablet</td><td>768 – 1023px</td><td>2컬럼 제품 매트릭스. Pill 탭 복귀. 문서 사이드바 드로어</td></tr>
+<tr><td>Desktop</td><td>1024 – 1279px</td><td>4컬럼 매트릭스. 3컬럼 문서 그리드</td></tr>
+<tr><td>Wide Desktop</td><td>≥ 1280px</td><td>넓은 헤로 거터. 고정 220px 사이드바</td></tr>
+</tbody>
+</table>
+
+<h3>9.2 Touch Targets</h3>
+<ul>
+  <li>Pill 버튼: 데스크톱 38–40px → 모바일 44px (패딩 오버라이드)</li>
+  <li>원형 아이콘 버튼: 36×36px → 모바일 44×44px</li>
+  <li>폼 입력: 40px → 모바일 44px</li>
+  <li>사이드바 네비: 32px → 모바일 드로어 44px</li>
+</ul>
+
+<h3>9.3 Collapsing Strategy</h3>
+<ul>
+  <li><strong>프로모 배너</strong>: 풀폭 유지, &lt; 480px에서 한 줄 truncate</li>
+  <li><strong>상단 네비</strong>: 1024px 이하 햄버거</li>
+  <li><strong>문서 그리드</strong>: 3컬럼 → &lt;1024px 사이드바 드로어 → &lt;768px 싱글 컬럼</li>
+  <li><strong>카테고리 매트릭스</strong>: 4컬럼 → &lt;1024px 수평 스크롤 (snap 포인트 캐러셀)</li>
+  <li><strong>제품 매트릭스</strong>: 4컬럼 → 태블릿 2컬럼 → 모바일 1컬럼</li>
+  <li><strong>헤로 타이포</strong>: 80px → &lt;1024px 56px → &lt;768px 40px → &lt;480px 32px</li>
+  <li><strong>스탯 스트립</strong>: 4컬럼 → &lt;768px 2×2 → &lt;480px 1컬럼</li>
+</ul>
+</section>
+
+<section id="iteration">
+<h2>10. Iteration Guide</h2>
+<ol>
+  <li>한 번에 한 컴포넌트에 집중. 시스템은 높은 내부 일관성을 갖는다.</li>
+  <li>컴포넌트명과 토큰을 직접 참조 (<code>{colors.primary}</code>, <code>{component-name}-pressed</code>, <code>{rounded.full}</code>) — 의역 금지</li>
+  <li>새 변형은 별도 컴포넌트 엔트리로 추가 (<code>-pressed</code>, <code>-disabled</code>, <code>-active</code>)</li>
+  <li>본문 기본은 <code>{typography.body-md}</code>, 강조 기본은 <code>{typography.subtitle}</code>. 헤드라인은 hero-display → display-lg → heading-lg → heading-md → heading-sm 순으로 step-down</li>
+  <li>카테고리 컬러를 카드 정체성에 한정. 표준 버튼이나 일반 표면에 카테고리 컬러가 보이면 "이 표면이 그것을 얻을 자격이 있는가?"를 자문</li>
+  <li>Pill 버튼(<code>{rounded.full}</code>)은 항상; 사각 버튼은 이 언어에서 "서드파티 위젯" 신호로 읽힘</li>
+</ol>
+</section>
+
+<section id="gaps">
+<h2>11. Known Gaps</h2>
+<ul>
+  <li>다크 모드 토큰(canvas, surface, ink, hairline)이 본 명세에 포함되지 않음 — 별도 정의 필요</li>
+  <li>애니메이션/트랜지션 타이밍 미포함; 호버/포커스 트랜지션은 150–200ms ease 권장</li>
+  <li>폼 유효성 성공 상태는 기본 외 명시 안 됨 — 그린 보더 + success 뱃지 표준 패턴 권장</li>
+  <li>문서 내 코드 신택스 하이라이팅 팔레트 미정 — 시스템 모노스페이스 + 최소 컬러링 권장</li>
+</ul>
+</section>
+
+<footer>
+  <p>Generic Modern Web Design System Specification — 범용 디자인 시스템 명세서. 본 문서는 회사 고유 정보를 제거하고 구조적 토큰 체계만 보존하여 재사용 가능하도록 구성됨.</p>
+</footer>
+
+</div>
+</body>
+</html>
