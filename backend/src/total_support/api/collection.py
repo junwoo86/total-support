@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -89,7 +89,7 @@ def trigger_run(
     return RunTriggerResponse(
         job_id=job_id,
         site=body.site,
-        started_at=datetime.now(),
+        started_at=datetime.now(timezone.utc),
         message=f"{body.site} 수집 시작 (runner={runner}, job {job_id})",
     )
 

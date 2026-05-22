@@ -15,7 +15,7 @@ import threading
 import traceback
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 # ============================================================
@@ -121,7 +121,7 @@ def trigger(
                 _RUNNING.pop(site, None)
 
     t = threading.Thread(target=_worker, daemon=True, name=f"scrape-{site}-{job_id}")
-    handle = JobHandle(job_id=job_id, site=site, started_at=datetime.now(), thread=t)
+    handle = JobHandle(job_id=job_id, site=site, started_at=datetime.now(timezone.utc), thread=t)
     with _LOCK:
         _RUNNING[site] = handle
     t.start()

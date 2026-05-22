@@ -23,7 +23,7 @@ import traceback
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import func, select
@@ -98,7 +98,7 @@ class BaseScraper(ABC):
             ScrapeResult — 호출자에게 통계 반환.
         """
         assert self.SITE_CODE in ("BIZINFO", "IRIS", "SBA"), "SITE_CODE 미설정"
-        started_at = datetime.now()
+        started_at = datetime.now(timezone.utc)
         t0 = time.monotonic()
 
         # 1) RUNNING row 즉시 적재 (헬스 패널이 보게)
@@ -168,7 +168,7 @@ class BaseScraper(ABC):
             row = db.get(GrantCollectionRun, run_id)
             if row is not None:
                 row.status = status
-                row.finished_at = datetime.now()
+                row.finished_at = datetime.now(timezone.utc)
                 row.pages_visited = result.pages_visited
                 row.new_records = result.new_records
                 row.updated_records = result.updated_records

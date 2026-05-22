@@ -127,54 +127,44 @@ class SbaScraper(BaseScraper):
                     break
 
     def _extract_from_dom(self, posting_status: str) -> list[ListingItem]:
-        """브라우저 DOM에서 mid + title 직접 추출.
+        """GridView1의 메인 row(15-cell)만 정밀 추출.
 
-        SBA 실측: mid는 `<td onclick="location.href='...&mid=...'">` 또는
-        a[href] 양쪽에 들어있음. 모든 [onclick]/[href] 요소를 스캔하고
-        HTML entity는 브라우저가 자동 디코드한다.
+        SBA 실측 구조 (id=ContentPlaceHolder1_MainContents_GridView1):
+        - 메인 row: 15개 td. mid는 td[0..6, 10]의 onclick에 들어있음.
+        - 사업명: row 내 `<a>` 태그의 textContent (placeholder 텍스트 미포함).
+        - 접수기간: row 내 YYYY-MM-DD 두 개 (td[11]=start, td[12]=end).
+        - 모바일 stacked row: cell_count==1 — 무시.
+        - 헤더 row: TH만 — 무시.
         """
-        data = self._page.eval_on_selector_all(
-            "[onclick],[href]",
-            """(els) => els.map(e => ({
-                onclick: e.getAttribute('onclick') || '',
-                href: e.getAttribute('href') || '',
-                tag: e.tagName,
-                text: (e.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 400),
-                titleAttr: e.getAttribute('title') || ''
-            }))"""
+        rows = self._page.eval_on_selector_all(
+            "table[id*='GridView1'] tr",
+            r"""(trs) => trs.map(tr => {
+                const cells = Array.from(tr.querySelectorAll('td'));
+                if (cells.length < 10) return null;
+                let mid = null;
+                for (const c of cells) {
+                    const oc = c.getAttribute('onclick') || '';
+                    const m = oc.match(/mid=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
+                    if (m) { mid = m[1].toLowerCase(); break; }
+                }
+                if (!mid) return null;
+                const aTexts = Array.from(tr.querySelectorAll('a'))
+                    .map(a => (a.textContent || '').replace(/\s+/g, ' ').trim())
+                    .filter(t => t.length >= 3);
+                const fullText = (tr.textContent || '').replace(/\s+/g, ' ');
+                const dates = fullText.match(/\d{4}-\d{2}-\d{2}/g) || [];
+                return {
+                    mid,
+                    title: aTexts[0] || '',
+                    start: dates[0] || '',
+                    end: dates[1] || ''
+                };
+            }).filter(x => x !== null)"""
         )
 
-        items: list[ListingItem] = []
-        # mid별 최선 title을 모은 후 ListingItem 생성
-        # (같은 mid가 a + td + img 여러 곳에 나타남 — 그중 가장 적합한 text 선택)
-        mid_to_best_title: dict[str, str] = {}
-        for el in data:
-            blob = (el.get("href") or "") + " " + (el.get("onclick") or "")
-            m = _MID_RE.search(blob)
-            if not m:
-                continue
-            mid = m.group(1).lower()
-            text = el.get("text") or el.get("titleAttr") or ""
-            if not text or len(text) < 3:
-                continue
-            # title 선택 기준: 짧은 a 텍스트 우선, 긴 td 텍스트는 fallback
-            cur = mid_to_best_title.get(mid)
-            if cur is None or (len(text) < len(cur) and len(text) >= 10) or len(cur) < 10:
-                mid_to_best_title[mid] = text
-
-        for mid, title in mid_to_best_title.items():
-            if mid in self._seen_mids:
-                continue
-            self._seen_mids.add(mid)
-            self._mid_status[mid] = posting_status
-            items.append(
-                ListingItem(
-                    source_id=mid,
-                    title=title[:480],
-                    detail_url=BASE_URL + DETAIL_PATH_FMT.format(mid=mid),
-                    posting_status_hint=posting_status,
-                )
-            )
+        items = _rows_to_items(rows, posting_status, self._seen_mids)
+        for it in items:
+            self._mid_status[it.source_id] = posting_status
         return items
 
     def _goto_next_page(self) -> bool:
@@ -297,6 +287,39 @@ def _closest(node, tag: str):
             return cur
         cur = cur.parent
     return None
+
+
+def _rows_to_items(
+    rows: list[dict],
+    posting_status: str,
+    seen_mids: set[str],
+) -> list[ListingItem]:
+    """JS 추출 결과(dict 리스트)를 ListingItem 리스트로 변환.
+
+    Playwright 의존성 없이 단위 테스트 가능하도록 분리. seen_mids 는
+    호출자가 누적 관리(in-place 갱신).
+    """
+    items: list[ListingItem] = []
+    for r in rows:
+        mid = (r.get("mid") or "").lower()
+        if not mid or mid in seen_mids:
+            continue
+        title = (r.get("title") or "").strip()
+        if len(title) < 3:
+            continue
+        seen_mids.add(mid)
+        start, end = (r.get("start") or "").strip(), (r.get("end") or "").strip()
+        period_hint = f"{start} ~ {end}" if start and end else None
+        items.append(
+            ListingItem(
+                source_id=mid,
+                title=title[:480],
+                detail_url=BASE_URL + DETAIL_PATH_FMT.format(mid=mid),
+                posting_status_hint=posting_status,
+                raw_period_hint=period_hint,
+            )
+        )
+    return items
 
 
 def _extract_detail_period(html: str) -> str | None:
