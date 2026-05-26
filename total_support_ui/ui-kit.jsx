@@ -51,10 +51,10 @@ const POSTING_STATUS_LABEL = {
 };
 const SUITABILITY_LABEL = { HIGH: '상', NORMAL: '일반' };
 const MATCH_MODE_LABEL  = {
-  WORD_BOUNDARY: 'WORD_BOUNDARY',
-  EXACT_HANGUL:  'EXACT_HANGUL',
-  SUBSTRING:     'SUBSTRING',
-  REGEX:         'REGEX',
+  WORD_BOUNDARY: '영문 단어',
+  EXACT_HANGUL:  '한글 단어',
+  SUBSTRING:     '부분 일치',
+  REGEX:         '정규식',
 };
 
 /* ============================================================

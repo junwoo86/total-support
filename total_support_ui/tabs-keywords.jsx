@@ -132,7 +132,7 @@ function KeywordsTab({
                   {!k.enabled && <Badge tone="neutral" className="" >비활성</Badge>}
                 </div>
                 <div className="kw-item-meta">
-                  <span className="mode">{k.match_mode}</span>
+                  <span className="mode" title={k.match_mode}>{MATCH_MODE_LABEL[k.match_mode] || k.match_mode}</span>
                   {k.case_sensitive && <span>대소문자 구분</span>}
                   {k.negative_context && k.negative_context.length > 0 && (
                     <span className="neg-list">⛔ {k.negative_context.join(', ')}</span>
@@ -401,10 +401,10 @@ function KeywordEditModal({ mode, domain, initial, postings, onClose, onSubmit }
       <div className="field-row">
         <Field label="매칭 모드">
           <SelectInput value={matchMode} onChange={setMatchMode}>
-            <option value="WORD_BOUNDARY">WORD_BOUNDARY — 영문 단축어 (\b...\b)</option>
-            <option value="EXACT_HANGUL">EXACT_HANGUL — 한글 단어</option>
-            <option value="SUBSTRING">SUBSTRING — 부분 매칭</option>
-            <option value="REGEX">REGEX — 사용자 지정</option>
+            <option value="WORD_BOUNDARY">영문 단어 — 단어 경계 매칭 (\b...\b)</option>
+            <option value="EXACT_HANGUL">한글 단어 — 한글 좌우 음절 차단</option>
+            <option value="SUBSTRING">부분 일치 — 어디든 포함되면 매칭</option>
+            <option value="REGEX">정규식 — 사용자 지정 패턴</option>
           </SelectInput>
         </Field>
         <Field label="옵션">
