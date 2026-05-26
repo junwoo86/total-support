@@ -292,6 +292,23 @@
 }
 .data-table .relevance-score { font-weight: 600; font-variant-numeric: tabular-nums; }
 .data-table .relevance-na { color: var(--steel); }
+/* AI 평가 사유 셀 — 인라인 multiline (3줄까지, 초과 시 ellipsis) */
+.data-table .reason-cell {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink, #0f172a);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+  white-space: normal;
+}
+.data-table .reason-cell.reason-na {
+  color: var(--steel);
+  -webkit-line-clamp: 1;
+}
+
 .data-table .relevance-fail-badge {
   font-size: 0.78em;
   font-weight: 700;

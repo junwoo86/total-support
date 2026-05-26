@@ -166,21 +166,13 @@ function PostingStatusBadge({ value }) {
   return <Badge tone="neutral">{POSTING_STATUS_LABEL.CLOSED}</Badge>;
 }
 
-/* RelevanceScore — 회사 적합도 평가.
- *  failed=true       → "분석 실패" 배지 (최상단 노출, 사용자 조치 신호)
- *  value=null        → "—" (평가 안 함: 지침 비었거나 evaluator 비활성)
- *  value=0~100       → 점수 표시, 80↑ "추천" 배지, ? 클릭 시 사유 popover
+/* RelevanceScore — 회사 적합도 점수 셀.
+ *  failed=true → "분석 실패" 배지 (최상단 노출 신호)
+ *  value=null  → "—" (평가 안 됨)
+ *  value=N     → "{N}%" (80↑ 강조 톤)
+ *  사유는 별도 `RelevanceReason` 셀에 노출 — 여기엔 ? 버튼/추천 배지 없음.
  */
-function RelevanceScore({ value, reason, failed }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
-  }, [open]);
-
+function RelevanceScore({ value, failed }) {
   if (failed) {
     return (
       <span className="relevance-cell relevance-failed"
@@ -193,28 +185,20 @@ function RelevanceScore({ value, reason, failed }) {
     return <span className="relevance-cell relevance-na" title="회사 지침 미설정 — 평가 안 됨">—</span>;
   }
   const tone = value >= 80 ? 'relevance-high' : value >= 50 ? 'relevance-mid' : 'relevance-low';
-  const hasReason = !!(reason && reason.trim());
   return (
-    <span className={`relevance-cell ${tone}`} ref={ref}>
+    <span className={`relevance-cell ${tone}`}>
       <span className="relevance-score">{value}%</span>
-      {hasReason && (
-        <button
-          type="button"
-          className="relevance-hint"
-          onClick={() => setOpen(o => !o)}
-          aria-label="평가 사유 보기"
-          title="평가 사유 보기"
-        >?</button>
-      )}
-      {value >= 80 && <span className="relevance-badge">추천</span>}
-      {open && hasReason && (
-        <div className="relevance-popover" role="tooltip">
-          <div className="relevance-popover-head">AI 평가 사유 ({value}%)</div>
-          <div className="relevance-popover-body">{reason}</div>
-        </div>
-      )}
     </span>
   );
+}
+
+/* RelevanceReason — AI 평가 사유 인라인 셀 (300자 안팎).
+ *  failed → 빈칸, NULL/빈문자 → "—", 그 외 → 본문 텍스트 표시 (multiline). */
+function RelevanceReason({ text, failed }) {
+  if (failed) return <span className="reason-cell reason-na">—</span>;
+  const t = (text || '').trim();
+  if (!t) return <span className="reason-cell reason-na">—</span>;
+  return <div className="reason-cell" title={t}>{t}</div>;
 }
 
 function RunStatusBadge({ value }) {
