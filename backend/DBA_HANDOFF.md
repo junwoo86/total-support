@@ -8,20 +8,21 @@
 
 ## 한 줄 요약 (PRD §11.12)
 
-> 본 모듈은 같은 PostgreSQL 인스턴스 안에 `tb_grant_*` 5개 테이블, `tb_grant_alembic_version` 1개 마이그레이션 추적 테이블, `tb_grant_keyword_version_seq` 1개 시퀀스만 추가 생성하며, 기존 DB·롤·시스템 파라미터·다른 모듈 테이블에는 어떤 ALTER도 수행하지 않습니다. 시간대는 쿼리식 `AT TIME ZONE 'Asia/Seoul'`로만 처리하며, 슈퍼유저 권한도 요구하지 않습니다.
+> 본 모듈은 같은 PostgreSQL 인스턴스 안에 `tb_grant_*` 6개 테이블, `tb_grant_alembic_version` 1개 마이그레이션 추적 테이블, `tb_grant_keyword_version_seq` 1개 시퀀스만 추가 생성하며, 기존 DB·롤·시스템 파라미터·다른 모듈 테이블에는 어떤 ALTER도 수행하지 않습니다. 시간대는 쿼리식 `AT TIME ZONE 'Asia/Seoul'`로만 처리하며, 슈퍼유저 권한도 요구하지 않습니다.
 
 ---
 
 ## 1. 추가되는 객체 (전체)
 
-### 테이블 (5)
+### 테이블 (6)
 | 테이블 | 행 추정 | 목적 |
 |---|---|---|
-| `tb_grant_postings` | 일 ~30~50건, 무기한 보존 | 메인 — 공고 본문 + 스크리닝 결과 |
+| `tb_grant_postings` | 일 ~30~50건, 무기한 보존 | 메인 — 공고 본문 + 스크리닝 결과 + AI 적합도 점수/사유 |
 | `tb_grant_domains` | 5~10 | 분야 마스터 (AI/바이오/헬스케어/웰니스) |
 | `tb_grant_keywords` | ~50 | 분야별 매칭 키워드 |
 | `tb_grant_collection_runs` | 일 ~9건 (3사이트 × 3시간대), 90일 보존 | 수집 실행 이력 |
 | `tb_grant_system_logs` | 일 ~100~500건, level별 30/180/무기한 | 운영 이벤트 로그 |
+| `tb_grant_company_guideline` | 지침 수정 시마다 1행 누적 (append-only) | 회사 적합도 평가용 시스템 지침 (Vertex AI Gemini 입력). "현재" = ORDER BY version DESC LIMIT 1 |
 
 ### 보조 객체
 | 객체 | 용도 |
@@ -53,10 +54,11 @@ CREATE USER tb_grant_app WITH PASSWORD '<생성한_비밀번호>';
 GRANT CONNECT ON DATABASE "dashboard-dev" TO tb_grant_app;
 GRANT USAGE ON SCHEMA public TO tb_grant_app;
 
--- 본 모듈 5 테이블 + alembic 추적 테이블만 RW
+-- 본 모듈 6 테이블 + alembic 추적 테이블만 RW
 GRANT SELECT, INSERT, UPDATE, DELETE
   ON tb_grant_postings, tb_grant_domains, tb_grant_keywords,
-     tb_grant_collection_runs, tb_grant_system_logs, tb_grant_alembic_version
+     tb_grant_collection_runs, tb_grant_system_logs, tb_grant_company_guideline,
+     tb_grant_alembic_version
   TO tb_grant_app;
 
 GRANT USAGE ON SEQUENCE tb_grant_keyword_version_seq TO tb_grant_app;
@@ -77,8 +79,9 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO tb_grant_app;
 
 ```bash
 cd backend
-alembic upgrade head      # 약 0.5초 소요 (5 테이블 + 1 시퀀스 + 2 트리거 + 시드 22 INSERT)
-python scripts/verify_schema.py  # 7개 검증 항목 자동 통과 확인
+alembic upgrade head      # 약 0.8초 소요 (6 테이블 + 1 시퀀스 + 2 트리거 + 시드 22 INSERT
+                          #   + 003 평가 컬럼 + 004 evaluation_failed 컬럼)
+python scripts/verify_schema.py  # 자동 검증
 ```
 
 업무 외 시간 적용 권장. 마이그레이션 자체는 신규 테이블 생성이므로 락 영향 없음.
@@ -110,6 +113,7 @@ python scripts/verify_schema.py  # 7개 검증 항목 자동 통과 확인
 | `tb_grant_postings` | 무기한 |
 | `tb_grant_collection_runs` | 90일 후 월 1회 파티션 드롭 (수동 또는 별도 cron) |
 | `tb_grant_system_logs` | INFO 30일 / WARN 180일 / ERROR 무기한 |
+| `tb_grant_company_guideline` | 무기한 (append-only — 지침 버전 히스토리) |
 
 삭제는 모두 본 모듈 테이블 내부에서만 수행 — 외부 영향 0.
 
