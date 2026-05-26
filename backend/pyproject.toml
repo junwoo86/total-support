@@ -41,6 +41,10 @@ dependencies = [
   "redis>=5.2",
   # ----- Observability -----
   "structlog>=24.4",
+  # ----- LLM (Vertex AI Gemini · ADC) -----
+  # PRD 보강: 본문 over-screening 완화를 위한 요약. Biocom-lab 패턴.
+  # ADC 인증 (gcloud auth application-default login 또는 service account 바인딩)
+  "google-genai>=2.0",
 ]
 
 [project.optional-dependencies]

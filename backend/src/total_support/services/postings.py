@@ -62,8 +62,10 @@ def list_postings(db: Session, f: PostingFilter) -> PostingListResponse:
         select(func.count()).select_from(stmt.subquery())
     ).scalar_one()
 
-    # HIGH 우선 → D-Day 작은 순 → 최근 적재 순
+    # 정렬: 회사 적합도(LLM, 0~100, NULL 후순위) DESC → 키워드 적합도 HIGH 우선
+    # → D-Day 작은 순 → 최근 적재 순. relevance 가 없으면 기존 키워드 정렬이 작동.
     stmt = stmt.order_by(
+        GrantPosting.relevance_score.desc().nullslast(),
         GrantPosting.ai_suitability.asc(),
         GrantPosting.end_date.asc().nullslast(),
         GrantPosting.first_seen_at.desc(),
@@ -149,5 +151,8 @@ def _to_list_item(p: GrantPosting, d_day: int | None) -> PostingListItem:
         screened_with_version=p.screened_with_version,
         first_seen_at=p.first_seen_at,
         last_updated_at=p.last_updated_at,
+        relevance_score=p.relevance_score,
+        relevance_reason=p.relevance_reason,
+        evaluated_with_guideline_version=p.evaluated_with_guideline_version,
         d_day=d_day,
     )

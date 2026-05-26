@@ -40,6 +40,8 @@ function KeywordsTab({
         }
       />
 
+      <CompanyGuidelineCard />
+
       <div className="kw-layout">
         {/* 좌측: 분야 */}
         <div className="card flush">
@@ -452,4 +454,97 @@ function KeywordEditModal({ mode, domain, initial, postings, onClose, onSubmit }
   );
 }
 
-Object.assign(window, { KeywordsTab });
+/* ============================================================
+ * CompanyGuidelineCard — 회사 지침 (AI 적합도 평가용 시스템 프롬프트)
+ * 저장 시 백엔드가 version +1 + UNREVIEWED 공고 자동 재평가 트리거.
+ * ============================================================ */
+function CompanyGuidelineCard() {
+  const liveMode = window.API && window.API.LIVE_MODE;
+  const [content, setContent] = useState('');
+  const [version, setVersion] = useState(null);
+  const [loading, setLoading] = useState(liveMode);
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const toast = useToast();
+
+  useEffect(() => {
+    if (!liveMode) { setLoading(false); return; }
+    let cancelled = false;
+    window.API.getGuideline()
+      .then(g => {
+        if (cancelled) return;
+        setContent(g.content_md || '');
+        setVersion(g.version);
+      })
+      .catch(e => toast(`지침 로드 실패: ${e.message}`, 'error'))
+      .finally(() => !cancelled && setLoading(false));
+    return () => { cancelled = true; };
+  }, [liveMode]);
+
+  const handleChange = (e) => { setContent(e.target.value); setDirty(true); };
+  const handleSave = () => {
+    if (!liveMode) {
+      toast('mock 모드 — 지침 저장은 LIVE 모드에서만 동작', 'warn');
+      setDirty(false);
+      return;
+    }
+    setSaving(true);
+    window.API.putGuideline(content)
+      .then(g => {
+        setVersion(g.version);
+        setDirty(false);
+        toast(`지침 저장 (v${g.version}) — 미검토 공고 자동 재평가 시작`, 'success');
+      })
+      .catch(e => toast(`저장 실패: ${e.message}`, 'error'))
+      .finally(() => setSaving(false));
+  };
+
+  return (
+    <div className="card flush" style={{ marginBottom: 16 }}>
+      <div className="card-head">
+        <h3>회사 지침 <b>· AI 적합도 평가</b></h3>
+        <span style={{ fontSize: 13, color: 'var(--steel)' }}>
+          {version != null ? <>guideline_version <code>v{version}</code></> : (loading ? '로딩…' : '')}
+        </span>
+      </div>
+      <div style={{ padding: '0 16px 12px 16px' }}>
+        <div style={{ fontSize: 12, color: 'var(--steel)', marginBottom: 8, lineHeight: 1.55 }}>
+          회사 소개 + 진행하고 싶은 지원사업의 방향성을 적으세요. 저장하면 새로 수집되는
+          공고와 <strong>아직 검토하지 않은</strong> 공고들의 적합도(0~100%)를 자동 재평가합니다.
+          검토를 시작한 공고의 historical 점수는 보존됩니다.
+        </div>
+        <textarea
+          className="guideline-textarea"
+          rows={6}
+          value={content}
+          onChange={handleChange}
+          disabled={loading || saving}
+          placeholder={"예) 우리 회사는 AI 기반 의료 진단 솔루션을 개발하는 시리즈 A 스타트업입니다.\n주력 분야: 영상 진단, 디지털 헬스케어, FDA/MFDS 인허가 지원.\n관심 사업: R&D 자금, 임상시험 비용 매칭, 글로벌 진출 지원."}
+          style={{
+            width: '100%',
+            padding: '10px 12px',
+            border: '1px solid var(--border, #cbd5e1)',
+            borderRadius: 6,
+            fontFamily: 'inherit',
+            fontSize: 13,
+            lineHeight: 1.55,
+            resize: 'vertical',
+            boxSizing: 'border-box',
+          }}
+        />
+        <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleSave}
+            disabled={loading || saving || !dirty}
+          >
+            {saving ? '저장 중…' : dirty ? '저장 (재평가 트리거)' : '저장됨'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { KeywordsTab, CompanyGuidelineCard });

@@ -141,6 +141,14 @@
     async getLogs(opts = {}) {
       return jget('/api/grant/logs', opts);
     },
+
+    // ----- Company guideline (회사 적합도 평가용 시스템 지침) -----
+    async getGuideline() {
+      return jget('/api/grant/company-guideline');
+    },
+    async putGuideline(content_md) {
+      return jsend('PUT', '/api/grant/company-guideline', { content_md });
+    },
   };
 
   // 백엔드 PostingListItem → 프론트 posting shape으로 (assigned_fields list/string 호환)
@@ -151,7 +159,7 @@
       assigned_fields: Array.isArray(p.assigned_fields) ? p.assigned_fields : [],
       // detail은 별도 요청
       content_html: null,
-      // mockdata.summary는 본문 일부 — 백엔드엔 없음. title의 앞부분으로 대체
+      // 사업 상세 요약 — 백엔드 본문 selector 적용 후 title fallback (LLM 요약 X)
       summary: p.title.length > 120 ? p.title.slice(0, 120) + '…' : p.title,
     };
   }

@@ -21,6 +21,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
@@ -109,6 +110,12 @@ class GrantPosting(Base):
     last_updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+    # 회사 적합도 평가 (마이그레이션 003 · Vertex AI Gemini · ADC)
+    # gcp_project_id 또는 회사 지침이 없으면 NULL. 평가 실패도 NULL.
+    relevance_score: Mapped[int | None] = mapped_column(SmallInteger)
+    relevance_reason: Mapped[str | None] = mapped_column(Text)
+    evaluated_with_guideline_version: Mapped[int | None] = mapped_column(Integer)
 
 
 # ============================================================
@@ -220,3 +227,19 @@ class GrantSystemLog(Base):
     posting_id: Mapped[int | None] = mapped_column(BigInteger)
     message: Mapped[str] = mapped_column(Text, nullable=False)
     payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+
+
+# ============================================================
+# §8.2  tb_grant_company_guideline — 회사 적합도 평가용 시스템 지침
+# ============================================================
+# 단일 row 운영 (id=1 고정). 수정 시 version +1 → UNREVIEWED 공고
+# 자동 재평가 트리거. 검토 진행 중/완료된 공고는 historical 값 보존.
+class GrantCompanyGuideline(Base):
+    __tablename__ = "tb_grant_company_guideline"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)  # 1로 고정
+    content_md: Mapped[str] = mapped_column(Text, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )

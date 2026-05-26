@@ -1,0 +1,158 @@
+"""Company guideline 서비스 — 회사 적합도 평가용 시스템 프롬프트.
+
+단일 row (id=1) 운영. 수정 시 version +1 → UNREVIEWED 공고 재평가 자동 트리거.
+검토가 시작된 (NEEDS_REVIEW / IN_PROGRESS / EXCLUDED) 공고는 historical
+평가값을 보존 (사용자 결정 영향 영구 기록).
+"""
+
+from __future__ import annotations
+
+import logging
+import threading
+from dataclasses import dataclass
+from datetime import datetime, timezone
+
+from sqlalchemy import select, update
+from sqlalchemy.orm import Session
+
+from total_support.db import GrantCompanyGuideline, GrantPosting, SessionLocal
+
+logger = logging.getLogger(__name__)
+
+
+# ============================================================
+# 평가 단계에서 base.py 가 호출하는 가벼운 read 모델
+# ============================================================
+@dataclass(slots=True, frozen=True)
+class GuidelineSnapshot:
+    content_md: str
+    version: int
+
+
+def get_current_guideline_for_eval() -> GuidelineSnapshot | None:
+    """수집 시점 평가용 — 빈 지침이거나 미존재면 None."""
+    with SessionLocal() as db:
+        row = db.get(GrantCompanyGuideline, 1)
+        if not row or not (row.content_md or "").strip():
+            return None
+        return GuidelineSnapshot(content_md=row.content_md, version=row.version)
+
+
+# ============================================================
+# CRUD (API 라우터에서 사용)
+# ============================================================
+def get_current(db: Session) -> GrantCompanyGuideline:
+    """단일 row 반환. 마이그레이션 003 에서 빈 row 가 INSERT 되었음."""
+    row = db.get(GrantCompanyGuideline, 1)
+    if row is None:
+        # 안전망 — 마이그레이션 외 경로로 row 가 사라진 경우 자동 생성
+        row = GrantCompanyGuideline(id=1, content_md="", version=1)
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+    return row
+
+
+def update_content(db: Session, *, content_md: str) -> GrantCompanyGuideline:
+    """지침 본문 수정. 내용이 실제로 바뀌면 version +1 + UNREVIEWED 재평가 큐.
+
+    Returns: 갱신된 row (caller 는 row.version 으로 백필 대상 식별 가능).
+    """
+    row = get_current(db)
+    new_md = (content_md or "").strip()
+
+    if new_md == (row.content_md or "").strip():
+        return row  # no-op
+
+    row.content_md = new_md
+    row.version = row.version + 1
+    row.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(row)
+
+    # UNREVIEWED 공고 재평가는 백그라운드 스레드로 — 라우터 응답 차단 X
+    _trigger_reevaluation_async(new_version=row.version)
+    return row
+
+
+# ============================================================
+# UNREVIEWED 재평가 백필 (지침 변경 시 자동)
+# ============================================================
+_BACKFILL_LOCK = threading.Lock()
+_BACKFILL_THREAD: threading.Thread | None = None
+
+
+def _trigger_reevaluation_async(*, new_version: int) -> None:
+    """UNREVIEWED 공고 전수 재평가를 별도 스레드에서 실행 (중복 방지)."""
+    global _BACKFILL_THREAD
+    with _BACKFILL_LOCK:
+        if _BACKFILL_THREAD is not None and _BACKFILL_THREAD.is_alive():
+            logger.info("guideline backfill already running — skip new trigger")
+            return
+        t = threading.Thread(
+            target=_run_reevaluation,
+            args=(new_version,),
+            daemon=True,
+            name=f"guideline-backfill-v{new_version}",
+        )
+        _BACKFILL_THREAD = t
+        t.start()
+
+
+def _run_reevaluation(new_version: int) -> None:
+    """실제 백필 본체 — UNREVIEWED 공고들을 새 지침으로 재평가."""
+    from total_support.services.evaluator import get_evaluator
+
+    evaluator = get_evaluator()
+    if evaluator is None:
+        logger.info("evaluator disabled (no ADC/project) — skip backfill")
+        return
+
+    snapshot = get_current_guideline_for_eval()
+    if snapshot is None or snapshot.version != new_version:
+        # 지침이 또 바뀌었으면 새 트리거가 처리할 것
+        return
+
+    # 백필 대상 — UNREVIEWED 만 (사용자가 검토 시작한 건 historical 보존)
+    with SessionLocal() as db:
+        rows = list(
+            db.execute(
+                select(
+                    GrantPosting.id,
+                    GrantPosting.title,
+                    GrantPosting.content_html,
+                ).where(GrantPosting.review_status == "UNREVIEWED")
+            ).all()
+        )
+
+    if not rows:
+        return
+    logger.info("guideline backfill: re-evaluating %d UNREVIEWED postings", len(rows))
+
+    # 동시성 절제 — 한 번에 1건씩 처리. Gemini-flash 라 큰 부담은 없고
+    # 운영 DB 쪽 트랜잭션 부담을 분산한다.
+    from total_support.scrapers.base import _strip_tags_for_match
+
+    updated = 0
+    for pid, title, html in rows:
+        body = _strip_tags_for_match(html or "")
+        result = evaluator.evaluate(
+            guideline_md=snapshot.content_md,
+            posting_title=title or "",
+            posting_body=body,
+        )
+        if result is None:
+            continue
+        with SessionLocal() as db:
+            db.execute(
+                update(GrantPosting)
+                .where(GrantPosting.id == pid)
+                .values(
+                    relevance_score=result.score,
+                    relevance_reason=result.reason,
+                    evaluated_with_guideline_version=new_version,
+                )
+            )
+            db.commit()
+        updated += 1
+    logger.info("guideline backfill done — updated %d / %d", updated, len(rows))

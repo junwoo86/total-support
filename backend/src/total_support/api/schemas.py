@@ -44,6 +44,10 @@ class PostingListItem(ORMModel):
     screened_with_version: int
     first_seen_at: datetime
     last_updated_at: datetime
+    #: 회사 적합도 평가 (Gemini · 지침/ADC 미설정 시 NULL).
+    relevance_score: int | None = None
+    relevance_reason: str | None = None
+    evaluated_with_guideline_version: int | None = None
     #: 헬퍼 — UI가 표시할 D-Day (음수=경과). NULL이면 raw_period 노출.
     d_day: int | None = None
 
@@ -189,6 +193,20 @@ class RunTriggerResponse(BaseModel):
     site: str
     started_at: datetime
     message: str
+
+
+# ============================================================
+# Company guideline (회사 적합도 평가용 시스템 지침)
+# ============================================================
+class CompanyGuidelineOut(ORMModel):
+    id: int
+    content_md: str
+    version: int
+    updated_at: datetime
+
+
+class CompanyGuidelinePut(BaseModel):
+    content_md: str = Field(default="", max_length=10_000)
 
 
 # ============================================================

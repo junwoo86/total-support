@@ -19,6 +19,7 @@ from total_support.db.enums import (
 from total_support.db.models import (
     Base,
     GrantCollectionRun,
+    GrantCompanyGuideline,
     GrantDomain,
     GrantKeyword,
     GrantPosting,
@@ -36,6 +37,7 @@ __all__ = [
     # ORM models
     "Base",
     "GrantCollectionRun",
+    "GrantCompanyGuideline",
     "GrantDomain",
     "GrantKeyword",
     "GrantPosting",

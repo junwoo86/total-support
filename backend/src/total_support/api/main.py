@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from total_support import __version__
-from total_support.api import collection, domains, keywords, logs, postings
+from total_support.api import collection, domains, guidelines, keywords, logs, postings
 from total_support.config import get_settings
 from total_support.services.exceptions import (
     DuplicateError,
@@ -65,6 +65,7 @@ def create_app() -> FastAPI:
     app.include_router(keywords.preview_router, prefix=API_PREFIX)
     app.include_router(collection.router, prefix=API_PREFIX)
     app.include_router(logs.router, prefix=API_PREFIX)
+    app.include_router(guidelines.router, prefix=API_PREFIX)
 
     @app.get(f"{API_PREFIX}/ping")
     def ping():

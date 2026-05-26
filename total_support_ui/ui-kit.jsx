@@ -166,6 +166,46 @@ function PostingStatusBadge({ value }) {
   return <Badge tone="neutral">{POSTING_STATUS_LABEL.CLOSED}</Badge>;
 }
 
+/* RelevanceScore — 회사 적합도 평가 (0~100, NULL=미평가).
+ * 80%↑ 는 추천 강조, ? 버튼 클릭 시 평가 사유 popover. */
+function RelevanceScore({ value, reason }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  if (value == null) {
+    return <span className="relevance-cell relevance-na" title="회사 지침 미설정 또는 평가 실패">—</span>;
+  }
+  const tone = value >= 80 ? 'relevance-high' : value >= 50 ? 'relevance-mid' : 'relevance-low';
+  const hasReason = !!(reason && reason.trim());
+  return (
+    <span className={`relevance-cell ${tone}`} ref={ref}>
+      <span className="relevance-score">{value}%</span>
+      {hasReason && (
+        <button
+          type="button"
+          className="relevance-hint"
+          onClick={() => setOpen(o => !o)}
+          aria-label="평가 사유 보기"
+          title="평가 사유 보기"
+        >?</button>
+      )}
+      {value >= 80 && <span className="relevance-badge">추천</span>}
+      {open && hasReason && (
+        <div className="relevance-popover" role="tooltip">
+          <div className="relevance-popover-head">AI 평가 사유 ({value}%)</div>
+          <div className="relevance-popover-body">{reason}</div>
+        </div>
+      )}
+    </span>
+  );
+}
+
 function RunStatusBadge({ value }) {
   if (value === 'OK')      return <Badge tone="success">OK</Badge>;
   if (value === 'WARN')    return <Badge tone="warning">WARN</Badge>;

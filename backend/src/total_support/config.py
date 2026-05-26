@@ -55,6 +55,22 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     tz: str = "Asia/Seoul"
 
+    # --- Vertex AI Gemini (C 제안: 본문 요약) ------------------
+    # 인증은 ADC. 로컬: `gcloud auth application-default login`,
+    # Cloud Run: 서비스 계정 바인딩. 코드에 키 노출 없음.
+    # gcp_project_id 가 빈 문자열이면 summarizer 비활성 (= 기존 동작 유지).
+    #
+    # Biocom-lab 최신 패턴(2026-05) 차용:
+    #   GCP_REGION 은 다른 GCP 서비스(GCS, Cloud Run 등) 용으로 남기고,
+    #   Gemini 는 별도 GEMINI_LOCATION 으로 분리한다 (기본값 "global" —
+    #   Gemini global endpoint 사용 시 지역 제약·할당량 분리에 유리).
+    gcp_project_id: str = ""
+    gcp_region: str = "asia-northeast3"
+    gemini_location: str = "global"
+    gemini_model: str = "gemini-3.5-flash"
+    gemini_timeout_s: float = 30.0
+    gemini_max_input_chars: int = 8000  # token cost 보호 + 본문 컷오프
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
