@@ -87,6 +87,43 @@ class BaseScraper(ABC):
     # 신규 중단 조건: 페이지 내 모든 항목이 end_date 만료(< 한국 오늘)인
     # 페이지가 N회 연속이면 멈춘다 (최신순 목록의 후반부는 모두 마감일 것).
     EXPIRED_STREAK_LIMIT: int = 2
+    # 사이트별 본문 컨테이너 selector 후보 (스크리닝 노이즈 축소용 — A 제안).
+    # 첫 번째부터 시도하고 모두 실패하면 fallback to 전체 HTML + WARN.
+    # 빈 튜플이면 selector 적용 안 함 (= 기존 동작).
+    BODY_SELECTORS: tuple[str, ...] = ()
+    # 본문 영역이 의미를 가진다고 인정하는 최소 텍스트 길이.
+    BODY_MIN_TEXT_LEN: int = 50
+
+    # --------------------------------------------------------
+    # 본문 selector 추출 (A 제안 — 스크리닝 노이즈 축소)
+    # --------------------------------------------------------
+    def extract_body_html(self, raw_html: str, *, source_id: str = "") -> str:
+        """`BODY_SELECTORS` 첫 매치를 outerHTML 로 반환. 모두 실패 → 전체 HTML.
+
+        실패 시 `self._body_selector_misses` 에 source_id 누적 → run 종료
+        시점에 system_logs WARN 기록 + run status=WARN 으로 전환.
+        스크래퍼가 사이트 마크업 변경을 모니터링하는 신호로 사용된다.
+        """
+        if not self.BODY_SELECTORS:
+            return raw_html
+        try:
+            from selectolax.parser import HTMLParser
+            tree = HTMLParser(raw_html)
+        except Exception:  # noqa: BLE001
+            return raw_html
+        for sel in self.BODY_SELECTORS:
+            node = tree.css_first(sel)
+            if node is None:
+                continue
+            txt = (node.text(deep=True, strip=True) or "")
+            if len(txt) < self.BODY_MIN_TEXT_LEN:
+                continue
+            html = node.html or ""
+            if html:
+                return html
+        # 모든 selector 실패 — fallback + 누적
+        self._body_selector_misses.append(source_id or "?")
+        return raw_html
 
     # --------------------------------------------------------
     # 진입점
@@ -117,6 +154,7 @@ class BaseScraper(ABC):
         result = ScrapeResult()
         status = "OK"
         err_msg: str | None = None
+        self._body_selector_misses: list[str] = []
 
         try:
             # 2) 키워드 한 번만 로드 (페이지 순회 중 재사용)
@@ -154,6 +192,18 @@ class BaseScraper(ABC):
                 if result.pages_visited >= self.MAX_PAGES:
                     result.early_break_reason = "END_OF_LIST"
                     break
+
+            # 본문 selector 누락이 누적되면 사이트 마크업 변경 의심 → WARN.
+            # 임계치: 신규의 30% 또는 5건 (둘 중 큰 값) 이상 fallback 발생.
+            miss_count = len(self._body_selector_misses)
+            miss_threshold = max(5, int((result.new_records or 0) * 0.3))
+            if miss_count >= miss_threshold and self.BODY_SELECTORS:
+                result.warnings.append(
+                    f"BODY_SELECTOR_MISS x{miss_count} "
+                    f"(selectors={list(self.BODY_SELECTORS)}, "
+                    f"sample_ids={self._body_selector_misses[:5]}) "
+                    f"— 사이트 마크업 변경 점검 필요"
+                )
 
             if result.warnings:
                 status = "WARN"
@@ -325,6 +375,7 @@ class BaseScraper(ABC):
 
         # 2) sanitize
         content_html = sanitize_html(raw_html)
+        plain_body = _strip_tags_for_match(content_html)
 
         # 3) 접수기간 파싱 (목록 hint 우선, 없으면 상세 텍스트)
         raw_period = (item.raw_period_hint or raw_period_text or "").strip()
@@ -346,10 +397,14 @@ class BaseScraper(ABC):
             start_date = None
             end_date = None
 
-        # 4) 스크리닝
-        # text는 title + content_html에서 태그 제거한 본문 (간단히 sanitize된 결과 사용)
-        screen_text = item.title + "\n" + _strip_tags_for_match(content_html)
+        # 4) 스크리닝 — 본문 selector 적용된 plain text 사용
+        screen_text = item.title + "\n" + plain_body
         screen_result = screen(screen_text, kw_specs)
+
+        # 4-1) 회사 적합도 평가 (Gemini · 지침이 있을 때만)
+        rel_score, rel_reason, rel_version = _try_evaluate_relevance(
+            title=item.title, body_plain=plain_body,
+        )
 
         # 5) URL trim + 경고 로깅
         detail_url = item.detail_url
@@ -378,13 +433,23 @@ class BaseScraper(ABC):
             assigned_fields=screen_result.assigned_fields,
             ai_suitability=screen_result.ai_suitability,
             screened_with_version=kw_version,
+            relevance_score=rel_score,
+            relevance_reason=rel_reason,
+            evaluated_with_guideline_version=rel_version,
             first_seen_at=func.now(),
             last_updated_at=func.now(),
         )
+        # 평가 점수는 새로 산출된 경우에만 덮어쓰기 (None 으로 기존 값 지우지 않음).
+        rel_overrides: dict = {}
+        if rel_score is not None:
+            rel_overrides = {
+                "relevance_score": stmt.excluded.relevance_score,
+                "relevance_reason": stmt.excluded.relevance_reason,
+                "evaluated_with_guideline_version": stmt.excluded.evaluated_with_guideline_version,
+            }
         stmt = stmt.on_conflict_do_update(
             index_elements=["source_site", "source_id"],
             set_={
-                # title/url 등은 사이트가 갱신할 수 있으므로 덮어쓰기
                 "title": stmt.excluded.title,
                 "detail_url": stmt.excluded.detail_url,
                 "content_html": stmt.excluded.content_html,
@@ -396,6 +461,7 @@ class BaseScraper(ABC):
                 "ai_suitability": stmt.excluded.ai_suitability,
                 "screened_with_version": stmt.excluded.screened_with_version,
                 "last_updated_at": func.now(),
+                **rel_overrides,
             },
         )
         db.execute(stmt)
@@ -446,3 +512,36 @@ def _strip_tags_for_match(html: str) -> str:
     text = re.sub(r"<[^>]+>", " ", html)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
+
+
+def _try_evaluate_relevance(
+    *, title: str, body_plain: str,
+) -> tuple[int | None, str | None, int | None]:
+    """수집 시점 회사 적합도 평가 — Gemini + 회사 지침.
+
+    Returns:
+        (score 0~100, reason 텍스트, 평가에 사용된 guideline.version).
+        지침 없음/SDK 미설정/평가 실패 → (None, None, None) — 적재는 계속.
+    """
+    if not body_plain or len(body_plain) < 30:
+        return None, None, None
+    try:
+        from total_support.services.evaluator import get_evaluator
+        from total_support.services.guidelines import get_current_guideline_for_eval
+
+        guideline = get_current_guideline_for_eval()
+        if not guideline:
+            return None, None, None  # 회사 지침 미설정 → 평가 안 함
+        evaluator = get_evaluator()
+        if evaluator is None:
+            return None, None, None  # ADC 미설정 → 평가 안 함
+        result = evaluator.evaluate(
+            guideline_md=guideline.content_md,
+            posting_title=title,
+            posting_body=body_plain,
+        )
+        if result is None:
+            return None, None, None
+        return result.score, result.reason, guideline.version
+    except Exception:  # noqa: BLE001
+        return None, None, None

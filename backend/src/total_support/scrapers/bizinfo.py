@@ -52,6 +52,9 @@ class BizinfoScraper(BaseScraper):
 
     SITE_CODE = "BIZINFO"
     ROWS_PER_PAGE = 15
+    # 실측 (2026-05-26): .view_cont 가 진짜 본문 (~400자), 페이지 전체는
+    # ~18,000자로 노이즈 97%. fallback은 .sub_cont (헤더 포함).
+    BODY_SELECTORS = (".view_cont", ".sub_cont")
 
     def __init__(self, *, timeout_s: float = 30.0, user_agent: str | None = None) -> None:
         self._client = httpx.Client(
@@ -96,8 +99,9 @@ class BizinfoScraper(BaseScraper):
             raise RuntimeError(f"상세 조회 실패: {e}") from e
 
         html = r.text
-        period_text = _extract_period(html)
-        return html, period_text
+        period_text = _extract_period(html)  # period 는 전체에서 찾는 게 안전
+        body_html = self.extract_body_html(html, source_id=item.source_id)
+        return body_html, period_text
 
     # --------------------------------------------------------
     # 정리

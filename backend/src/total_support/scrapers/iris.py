@@ -58,6 +58,9 @@ class IrisScraper(BaseScraper):
 
     SITE_CODE = "IRIS"
     ROWS_PER_PAGE = 10  # IRIS 기본값
+    # 실측 (2026-05-26): IRIS 의 POST 응답은 list view 와 같은 page shell 을
+    # 반환하므로 #content 가 가장 의미있는 본문 영역. 실패 시 fallback.
+    BODY_SELECTORS = ("#content", "#contentWrap")
 
     def __init__(self, *, timeout_s: float = 45.0) -> None:
         self._client = httpx.Client(
@@ -114,7 +117,8 @@ class IrisScraper(BaseScraper):
 
         html = r.text
         period = _extract_detail_period(html)
-        return html, period
+        body_html = self.extract_body_html(html, source_id=item.source_id)
+        return body_html, period
 
     def derive_posting_status(self, item: ListingItem) -> str:
         return item.posting_status_hint or "ONGOING"

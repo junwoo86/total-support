@@ -66,6 +66,9 @@ class SbaScraper(BaseScraper):
 
     SITE_CODE = "SBA"
     DEFAULT_NAV_TIMEOUT_MS = 25_000
+    # 실측 (2026-05-26): #rignt_content 가 사이트의 본문 컨테이너 (오타 그대로).
+    # fallback 으로 #container (메뉴 헤더 포함) 사용.
+    BODY_SELECTORS = ("#rignt_content", "#container")
 
     def __init__(self, *, headless: bool = True) -> None:
         from playwright.sync_api import sync_playwright
@@ -198,7 +201,8 @@ class SbaScraper(BaseScraper):
 
         html = r.text
         period = _extract_detail_period(html)
-        return html, period
+        body_html = self.extract_body_html(html, source_id=item.source_id)
+        return body_html, period
 
     def derive_posting_status(self, item: ListingItem) -> str:
         return item.posting_status_hint or "ONGOING"
