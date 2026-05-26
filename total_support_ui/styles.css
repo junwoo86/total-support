@@ -3,8 +3,8 @@
  * Loaded as a single file from index.html; @imports the parts.
  * ============================================================ */
 
-@import url('styles/01-base.css');
-@import url('styles/02-primitives.css');
-@import url('styles/03-layout.css');
-@import url('styles/04-overlays.css');
-@import url('styles/05-features.css');
+@import url('styles/01-base.css?v=13');
+@import url('styles/02-primitives.css?v=13');
+@import url('styles/03-layout.css?v=13');
+@import url('styles/04-overlays.css?v=13');
+@import url('styles/05-features.css?v=13');

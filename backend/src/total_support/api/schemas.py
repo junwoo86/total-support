@@ -67,6 +67,18 @@ class PostingListResponse(BaseModel):
     page_size: int
 
 
+class PostingStatusCounts(BaseModel):
+    """검토 상태별 카운트 — StatusTab 탭/칩 옆 숫자 표시용.
+
+    domain/q/hide_expired 등 다른 필터가 함께 들어오면 그 필터를 적용한 뒤
+    상태별로 GROUP BY 한 결과. status 자체는 필터 X (4가지 모두 항상 반환).
+    """
+    UNREVIEWED: int = 0
+    NEEDS_REVIEW: int = 0
+    IN_PROGRESS: int = 0
+    EXCLUDED: int = 0
+
+
 class ReviewStatusPatch(BaseModel):
     status: Literal["UNREVIEWED", "EXCLUDED", "NEEDS_REVIEW", "IN_PROGRESS"]
 

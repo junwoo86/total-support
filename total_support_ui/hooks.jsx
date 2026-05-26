@@ -103,6 +103,36 @@ function usePaginatedPostings({ liveMode, initialFilters, mockItems = [] }) {
   };
 }
 
+/* -- 0b. 검토 상태별 카운트 — StatusTab 의 탭/칩 카운트에 사용 ----
+ * `GET /api/grant/postings/counts` 를 동일 필터 (status 제외) 로 호출.
+ * filters / refreshKey 가 바뀌면 재요청 (작업 후 즉시 반영을 위해 refreshKey
+ * 카운터 외부에서 증가시킬 수 있게 노출). Mock 모드는 mockPostings 로컬 집계.
+ */
+function usePostingCounts({ liveMode, filters = {}, refreshKey = 0, mockPostings = [] }) {
+  const empty = { UNREVIEWED: 0, NEEDS_REVIEW: 0, IN_PROGRESS: 0, EXCLUDED: 0 };
+  const [counts, setCounts] = useState(empty);
+  const filtersKey = JSON.stringify(filters);
+
+  useEffect(() => {
+    if (!liveMode) {
+      const c = { ...empty };
+      for (const p of mockPostings) {
+        if (Object.hasOwn(c, p.review_status)) c[p.review_status] += 1;
+      }
+      setCounts(c);
+      return;
+    }
+    let cancelled = false;
+    window.API.getPostingCounts(filters)
+      .then(res => { if (!cancelled) setCounts({ ...empty, ...res }); })
+      .catch(() => { /* 카운트는 비치명적 — 실패 시 기존값 유지 */ });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveMode, filtersKey, refreshKey, mockPostings.length]);
+
+  return counts;
+}
+
 /* -- 1. LIVE 모드 초기 부트스트랩 ----------------------------- */
 function useLiveBootstrap({
   liveMode,
@@ -154,19 +184,35 @@ function usePostingReview({
   // 행 한 건이 새 status 로 바뀔 때, 각 hook 에서 보일지 안 보일지 판단해 해당 hook
   // items 에서 제거/유지/삽입을 결정. 가장 단순한 정책: 새 status 가 hook 의 status
   // 필터와 매치하면 inline update, 아니면 hook 에서 제거.
+  // (status 필터는 단일 string · 다중 string[] · 미지정 셋 모두 지원.)
+  const statusMatches = (wantedStatus, newStatus) => {
+    if (!wantedStatus) return true;
+    if (Array.isArray(wantedStatus)) {
+      return wantedStatus.length === 0 || wantedStatus.includes(newStatus);
+    }
+    return wantedStatus === newStatus;
+  };
   const applyToHooks = (id, newStatus, original) => {
+    const oldStatus = original?.review_status;
     for (const h of paginatedHooks) {
       const wantedStatus = h.filters && h.filters.status;
-      // 'ALL' 또는 미지정 → 모든 status 허용
-      const matches = !wantedStatus || wantedStatus === newStatus;
-      if (matches) {
+      const wasMatching  = statusMatches(wantedStatus, oldStatus);
+      const willMatch    = statusMatches(wantedStatus, newStatus);
+      if (willMatch && wasMatching) {
+        // 같은 hook 안에 머무름 — in-place update.
         h.upsertItem && h.upsertItem(id, {
           review_status: newStatus,
           last_updated_at: new Date().toISOString(),
         });
-      } else {
+      } else if (!willMatch && wasMatching) {
+        // 이 hook 에서 빠짐.
         h.removeItem && h.removeItem(id);
+      } else if (willMatch && !wasMatching) {
+        // 이 hook 으로 새로 들어옴 — partial 만으론 row 못 만드므로 refetch.
+        // (정렬·페이지 위치까지 백엔드 기준으로 정확히 맞추는 안전 경로.)
+        h.refetch && h.refetch();
       }
+      // (!willMatch && !wasMatching) — no-op.
     }
   };
 

@@ -139,7 +139,7 @@ def test_keywords_preview_basic_returns_response_object():
 def test_posting_filter_is_immutable_dataclass():
     """PostingFilter는 frozen — 라우터에서 만든 값이 service 내부에서
     실수로 변경되지 않아야 함."""
-    f = PostingFilter(status="UNREVIEWED", page=2)
+    f = PostingFilter(status=("UNREVIEWED",), page=2)
     with pytest.raises((AttributeError, TypeError)):  # FrozenInstanceError
         f.page = 5  # type: ignore[misc]
 
@@ -149,7 +149,8 @@ def test_posting_filter_defaults():
     assert f.page == 1
     assert f.page_size == 50
     assert f.hide_expired is False
-    assert f.status is None
+    assert f.status == ()
+    assert f.relevance_buckets == ()
 
 
 def test_postings_list_with_default_filter_returns_response_shape():
@@ -170,6 +171,63 @@ def test_postings_get_detail_unknown_id_raises_not_found():
 def test_postings_patch_unknown_id_raises_not_found():
     with SessionLocal() as db, pytest.raises(NotFoundError):
         svc_postings.patch_review_status(db, 9_999_999, "EXCLUDED")
+
+
+def test_postings_multi_status_filter_returns_only_those_statuses():
+    """다중 status: ('NEEDS_REVIEW','EXCLUDED') 필터 시 각 행의 review_status 가
+    둘 중 하나여야 함. UNREVIEWED / IN_PROGRESS 는 섞이지 않음."""
+    targets = ("NEEDS_REVIEW", "EXCLUDED")
+    with SessionLocal() as db:
+        out = svc_postings.list_postings(
+            db, PostingFilter(status=targets, page_size=50)
+        )
+        for item in out.items:
+            assert item.review_status in targets
+
+
+def test_postings_relevance_bucket_high_only_returns_score_ge_80():
+    """high 버킷 (80↑) 필터 — 모든 응답 행은 relevance_score >= 80 이어야 함."""
+    with SessionLocal() as db:
+        out = svc_postings.list_postings(
+            db, PostingFilter(relevance_buckets=("high",), page_size=50)
+        )
+        for item in out.items:
+            assert item.relevance_score is not None
+            assert item.relevance_score >= 80
+
+
+def test_postings_relevance_bucket_low_returns_score_lt_40():
+    with SessionLocal() as db:
+        out = svc_postings.list_postings(
+            db, PostingFilter(relevance_buckets=("low",), page_size=50)
+        )
+        for item in out.items:
+            assert item.relevance_score is not None
+            assert item.relevance_score < 40
+
+
+def test_postings_relevance_bucket_multi_high_or_mid_high():
+    """다중 버킷: ('high','mid_high') = 60↑ — 모든 응답이 60 이상."""
+    with SessionLocal() as db:
+        out = svc_postings.list_postings(
+            db, PostingFilter(relevance_buckets=("high", "mid_high"), page_size=50)
+        )
+        for item in out.items:
+            assert item.relevance_score is not None
+            assert item.relevance_score >= 60
+
+
+def test_postings_status_counts_sums_match_individual_filtered_lists():
+    """get_status_counts 결과가 status 단일 필터 list 의 total 과 일치해야 함."""
+    with SessionLocal() as db:
+        counts = svc_postings.get_status_counts(db, PostingFilter())
+        for status in ("UNREVIEWED", "NEEDS_REVIEW", "IN_PROGRESS", "EXCLUDED"):
+            single = svc_postings.list_postings(
+                db, PostingFilter(status=(status,), page_size=1)
+            )
+            assert getattr(counts, status) == single.total, (
+                f"counts.{status}={getattr(counts, status)} != list.total={single.total}"
+            )
 
 
 # ============================================================

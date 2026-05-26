@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from total_support.api.schemas import (
     PostingDetail,
     PostingListItem,
     PostingListResponse,
+    PostingStatusCounts,
 )
 from total_support.db import GrantPosting, dday_expr, seoul_today_expr
 from total_support.observability.logger import LogCategory, LogLevel, log_event
@@ -62,18 +63,66 @@ def _trim_body_html(source_site: str | None, content_html: str | None) -> str | 
     return content_html
 
 
+# 회사 적합도 점수 (0~100) 버킷 — UI 의 4단계 칩과 1:1 매핑.
+# 각 칩은 mutually exclusive 범위 (반열림 구간 [min, max)) — 합치면 0~100 전체 커버.
+# evaluation_failed / relevance_score NULL 은 어느 버킷에도 속하지 않음 (별도 노출).
+RELEVANCE_BUCKETS: dict[str, tuple[int | None, int | None]] = {
+    "high":     (80, None),   # 80 이상
+    "mid_high": (60, 80),     # 60~79
+    "mid":      (40, 60),     # 40~59
+    "low":      (None, 40),   # 39 이하
+}
+
+
 @dataclass(slots=True, frozen=True)
 class PostingFilter:
-    """list 쿼리 파라미터를 한 곳에서 표현. 라우터는 Query 검증 후 이 객체로 위임."""
+    """list 쿼리 파라미터를 한 곳에서 표현. 라우터는 Query 검증 후 이 객체로 위임.
 
-    status: str | None = None
-    suitability: str | None = None
-    site: str | None = None
-    domain: str | None = None
+    status/suitability/site/domain 은 다중 선택 가능 (튜플) — UI 의 multi-select
+    칩과 정합. 빈 튜플/None 은 "필터 없음" 으로 동일하게 취급.
+    """
+
+    status: tuple[str, ...] = field(default_factory=tuple)
+    suitability: tuple[str, ...] = field(default_factory=tuple)
+    site: tuple[str, ...] = field(default_factory=tuple)
+    domain: tuple[str, ...] = field(default_factory=tuple)
+    #: 4단계 적합도 버킷 (RELEVANCE_BUCKETS 의 key) — 다중 선택 시 OR 결합.
+    relevance_buckets: tuple[str, ...] = field(default_factory=tuple)
     q: str | None = None
     hide_expired: bool = False
     page: int = 1
     page_size: int = 50
+
+
+def _apply_common_filters(stmt, f: PostingFilter):
+    """list_postings / counts 가 공유하는 필터 적용. status 는 호출자가 별도 처리."""
+    if f.suitability:
+        stmt = stmt.where(GrantPosting.ai_suitability.in_(f.suitability))
+    if f.site:
+        stmt = stmt.where(GrantPosting.source_site.in_(f.site))
+    if f.domain:
+        # assigned_fields 는 콤마 문자열 — 각 도메인 라벨 LIKE 의 OR 결합.
+        stmt = stmt.where(
+            or_(*[GrantPosting.assigned_fields.ilike(f"%{d}%") for d in f.domain])
+        )
+    if f.q:
+        stmt = stmt.where(GrantPosting.title.ilike(f"%{f.q}%"))
+    if f.relevance_buckets:
+        clauses = []
+        for key in f.relevance_buckets:
+            rng = RELEVANCE_BUCKETS.get(key)
+            if rng is None:
+                continue
+            lo, hi = rng
+            parts = [GrantPosting.relevance_score.is_not(None)]
+            if lo is not None:
+                parts.append(GrantPosting.relevance_score >= lo)
+            if hi is not None:
+                parts.append(GrantPosting.relevance_score < hi)
+            clauses.append(and_(*parts))
+        if clauses:
+            stmt = stmt.where(or_(*clauses))
+    return stmt
 
 
 # ============================================================
@@ -86,18 +135,13 @@ def list_postings(db: Session, f: PostingFilter) -> PostingListResponse:
     stmt = select(GrantPosting, dday_expr(GrantPosting.end_date).label("d_day"))
 
     if f.status:
-        stmt = stmt.where(GrantPosting.review_status == f.status)
-    if f.suitability:
-        stmt = stmt.where(GrantPosting.ai_suitability == f.suitability)
-    if f.site:
-        stmt = stmt.where(GrantPosting.source_site == f.site)
-    if f.domain:
-        # assigned_fields 는 콤마 문자열 — LIKE 로 부분 매칭
-        stmt = stmt.where(GrantPosting.assigned_fields.ilike(f"%{f.domain}%"))
-    if f.q:
-        stmt = stmt.where(GrantPosting.title.ilike(f"%{f.q}%"))
+        stmt = stmt.where(GrantPosting.review_status.in_(f.status))
+    stmt = _apply_common_filters(stmt, f)
 
-    if f.hide_expired and f.status in ("NEEDS_REVIEW", "IN_PROGRESS"):
+    # hide_expired 는 status 가 NEEDS_REVIEW / IN_PROGRESS 와만 교차하는 항목에
+    # 의미가 있음. 다중 status 면 그중 하나라도 있으면 적용.
+    expirable = {"NEEDS_REVIEW", "IN_PROGRESS"}
+    if f.hide_expired and (not f.status or any(s in expirable for s in f.status)):
         stmt = stmt.where(
             (GrantPosting.end_date.is_(None))
             | (GrantPosting.end_date >= seoul_today_expr())
@@ -127,6 +171,35 @@ def list_postings(db: Session, f: PostingFilter) -> PostingListResponse:
     return PostingListResponse(
         items=items, total=total, page=f.page, page_size=f.page_size
     )
+
+
+# ============================================================
+# 검토 상태별 카운트
+# ============================================================
+def get_status_counts(db: Session, f: PostingFilter) -> PostingStatusCounts:
+    """status 필드를 제외한 같은 필터로 GROUP BY review_status — 4개 모두 반환.
+
+    StatusTab 의 탭 옆 합산 카운트 + 칩별 카운트 표시에 사용. domain/q/
+    hide_expired 등 다른 필터가 함께 들어오면 그 조건 하에서의 분포를 보여줌.
+    f.status 와 f.page/page_size 는 무시.
+    """
+    base = select(
+        GrantPosting.review_status,
+        func.count().label("c"),
+    )
+    base = _apply_common_filters(base, f)
+    if f.hide_expired:
+        base = base.where(
+            (GrantPosting.end_date.is_(None))
+            | (GrantPosting.end_date >= seoul_today_expr())
+        )
+    base = base.group_by(GrantPosting.review_status)
+
+    counts = PostingStatusCounts()
+    for status, c in db.execute(base).all():
+        if hasattr(counts, status):
+            setattr(counts, status, int(c))
+    return counts
 
 
 # ============================================================

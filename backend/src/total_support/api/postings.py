@@ -15,6 +15,7 @@ from total_support.api.schemas import (
     PostingDetail,
     PostingListItem,
     PostingListResponse,
+    PostingStatusCounts,
     ReviewStatusPatch,
 )
 from total_support.services import postings as svc
@@ -23,13 +24,46 @@ from total_support.services.postings import PostingFilter
 router = APIRouter(prefix="/postings", tags=["postings"])
 
 
+def _csv_tuple(raw: str | None) -> tuple[str, ...]:
+    """쉼표로 구분된 다중값 쿼리 파라미터 → 튜플. 빈 토큰 제거.
+
+    예) "NEEDS_REVIEW,IN_PROGRESS" → ("NEEDS_REVIEW", "IN_PROGRESS")
+    UI 의 multi-select 칩이 빈 선택일 때는 파라미터 자체를 보내지 않으므로
+    None → () 변환만 처리하면 충분.
+    """
+    if not raw:
+        return ()
+    return tuple(t.strip() for t in raw.split(",") if t.strip())
+
+
+def _build_filter(
+    *, status, suitability, site, domain, relevance_bucket,
+    q, hide_expired, page, page_size,
+) -> PostingFilter:
+    return PostingFilter(
+        status=_csv_tuple(status),
+        suitability=_csv_tuple(suitability),
+        site=_csv_tuple(site),
+        domain=_csv_tuple(domain),
+        relevance_buckets=_csv_tuple(relevance_bucket),
+        q=q,
+        hide_expired=hide_expired,
+        page=page,
+        page_size=page_size,
+    )
+
+
 @router.get("", response_model=PostingListResponse)
 def list_postings(
     db: Annotated[Session, Depends(get_db)],
-    status: str | None = Query(default=None, description="review_status 필터"),
-    suitability: str | None = Query(default=None, description="ai_suitability 필터"),
-    site: str | None = Query(default=None, description="source_site 필터"),
-    domain: str | None = Query(default=None, description="assigned_fields LIKE 필터 (label_ko)"),
+    status: str | None = Query(default=None, description="review_status 필터 (CSV 다중 가능)"),
+    suitability: str | None = Query(default=None, description="ai_suitability 필터 (CSV)"),
+    site: str | None = Query(default=None, description="source_site 필터 (CSV)"),
+    domain: str | None = Query(default=None, description="assigned_fields LIKE 필터 (CSV)"),
+    relevance_bucket: str | None = Query(
+        default=None,
+        description="회사 적합도 버킷 (high|mid_high|mid|low) CSV — 다중 OR",
+    ),
     hide_expired: bool = Query(default=False, description="PRD §5.2: 만료 자동 숨김"),
     q: str | None = Query(default=None, description="제목/요약 검색"),
     page: int = Query(default=1, ge=1),
@@ -37,15 +71,34 @@ def list_postings(
 ) -> PostingListResponse:
     return svc.list_postings(
         db,
-        PostingFilter(
-            status=status,
-            suitability=suitability,
-            site=site,
-            domain=domain,
-            q=q,
-            hide_expired=hide_expired,
-            page=page,
-            page_size=page_size,
+        _build_filter(
+            status=status, suitability=suitability, site=site, domain=domain,
+            relevance_bucket=relevance_bucket, q=q, hide_expired=hide_expired,
+            page=page, page_size=page_size,
+        ),
+    )
+
+
+@router.get("/counts", response_model=PostingStatusCounts)
+def get_status_counts(
+    db: Annotated[Session, Depends(get_db)],
+    suitability: str | None = Query(default=None),
+    site: str | None = Query(default=None),
+    domain: str | None = Query(default=None),
+    relevance_bucket: str | None = Query(default=None),
+    hide_expired: bool = Query(default=False),
+    q: str | None = Query(default=None),
+) -> PostingStatusCounts:
+    """검토 상태별 카운트 — StatusTab 의 탭 합산/칩 옆 숫자에 사용.
+
+    status 자체는 받지 않음 (4가지 모두 항상 반환). 나머지 필터는 list 와 동일.
+    """
+    return svc.get_status_counts(
+        db,
+        _build_filter(
+            status=None, suitability=suitability, site=site, domain=domain,
+            relevance_bucket=relevance_bucket, q=q, hide_expired=hide_expired,
+            page=1, page_size=1,
         ),
     )
 

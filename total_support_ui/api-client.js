@@ -95,19 +95,23 @@
 
     // ----- Postings -----
     /** 서버 페이지네이션 + 백엔드 필터·정렬.
-     *  opts 예: { status, suitability, site, domain, q, hide_expired, page, page_size } */
+     *  opts 예: { status, suitability, site, domain, relevance_bucket, q,
+     *           hide_expired, page, page_size }
+     *  - 배열 값 (다중 선택 칩) → CSV 로 직렬화 (backend 의 _csv_tuple 와 정합).
+     *  - 'ALL' / 'NONE' 같은 단일 모드 pseudo 옵션은 그대로 보냄 (NONE 은 LIKE
+     *    '%NONE%' 매치되지 않으므로 결과 0 — 미매칭 의도). */
     async fetchPostings(opts = {}) {
-      const params = {};
-      for (const [k, v] of Object.entries(opts)) {
-        if (v == null || v === '' || v === false) continue;
-        if (v === true) { params[k] = 'true'; continue; }
-        if (k === 'domain' && (v === 'ALL' || v === 'NONE')) continue;
-        if (v === 'ALL') continue;
-        params[k] = v;
-      }
+      const params = _serializeFilters(opts);
       const res = await jget('/api/grant/postings', params);
       // {items, total, page, page_size}
       return { ...res, items: res.items.map(normalizePosting) };
+    },
+    /** GET /postings/counts — { UNREVIEWED, NEEDS_REVIEW, IN_PROGRESS, EXCLUDED }
+     *  status 는 보내지 않음 (4개 모두 항상 반환). 나머지 필터는 동일. */
+    async getPostingCounts(opts = {}) {
+      const { status: _ignored, page: _p, page_size: _ps, ...rest } = opts;
+      const params = _serializeFilters(rest);
+      return jget('/api/grant/postings/counts', params);
     },
     async patchReviewStatus(id, status) {
       return jsend('PATCH', `/api/grant/postings/${id}/review-status`, { status });
@@ -169,6 +173,26 @@
       return jget('/api/grant/company-guideline/history');
     },
   };
+
+  // UI 필터 객체 → 쿼리스트링 파라미터.
+  // - 배열은 CSV 직렬화 (빈 배열은 파라미터 자체 생략 = 전체).
+  // - true → 'true', false/null/'' → 생략.
+  // - 'ALL' pseudo 값 → 생략 (단일 모드용).
+  function _serializeFilters(opts) {
+    const params = {};
+    for (const [k, v] of Object.entries(opts)) {
+      if (v == null || v === '' || v === false) continue;
+      if (v === true) { params[k] = 'true'; continue; }
+      if (Array.isArray(v)) {
+        if (v.length === 0) continue;
+        params[k] = v.join(',');
+        continue;
+      }
+      if (v === 'ALL') continue;
+      params[k] = v;
+    }
+    return params;
+  }
 
   // 백엔드 PostingListItem → 프론트 posting shape으로 (assigned_fields list/string 호환)
   function normalizePosting(p) {

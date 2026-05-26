@@ -37,18 +37,37 @@ function App() {
   useHealthPolling({ liveMode, hasRunning, setRuns });
 
   // ----- 서버 페이지네이션 hook · 탭별 1 인스턴스 -----
-  // 정렬은 백엔드(`relevance_score DESC NULLS LAST`)가 처리하므로 상위 200건이
-  // 가장 적합한 행임이 보장된다. 페이지가 누적된 끝에 도달하면 loadMore() 로
-  // 다음 200건 추가 fetch — 묻히는 행 없음.
+  // - status 는 다중 선택 가능 → 항상 배열로 보냄.
+  // - StatusTab 초기값: 빈 배열 (= 검토 필요 + 지원 진행 + 제외 모두 노출),
+  //   3가지가 합쳐진 큰 그림을 먼저 보여준 뒤 사용자가 칩으로 좁히도록.
   const unreviewedHook = usePaginatedPostings({
     liveMode,
-    initialFilters: { status: 'UNREVIEWED' },
+    initialFilters: { status: ['UNREVIEWED'] },
     mockItems: postings.filter(p => p.review_status === 'UNREVIEWED'),
   });
   const statusHook = usePaginatedPostings({
     liveMode,
-    initialFilters: { status: 'NEEDS_REVIEW', hide_expired: true },
+    initialFilters: {
+      status: ['NEEDS_REVIEW', 'IN_PROGRESS', 'EXCLUDED'],
+      hide_expired: true,
+    },
     mockItems: postings.filter(p => p.review_status !== 'UNREVIEWED'),
+  });
+
+  // 검토 상태별 카운트 — StatusTab 의 탭 옆 합산 + 칩 옆 숫자에 사용.
+  // statusHook 의 다른 필터(domain/q/hide_expired) 와 같은 조건을 보내 정합 유지.
+  const statusCountsFilters = useMemo(() => {
+    const { status: _s, page: _p, page_size: _ps, ...rest } = statusHook.filters || {};
+    return rest;
+  }, [statusHook.filters]);
+  // 작업(상태 변경)이 일어났을 때 즉시 재계산 — postings 길이 변화를 키로 활용.
+  // refreshKey 로 postings 참조를 직접 전달 — PATCH 후 setPostings 가 새 array
+  // ref 를 만들면 카운트도 즉시 재집계 (live: refetch, mock: 로컬 집계).
+  const statusCounts = usePostingCounts({
+    liveMode,
+    filters: statusCountsFilters,
+    refreshKey: postings,
+    mockPostings: postings,
   });
 
   const review = usePostingReview({
@@ -68,17 +87,17 @@ function App() {
   });
 
   // ----- Tab counts -----
-  // LIVE: hook 의 백엔드 total 사용 (전체 정확한 카운트).
-  // Mock: 메모리 postings filter 카운트.
+  // 신규 미검토: usePaginatedPostings hook 의 total 또는 mock 집계.
+  // 검토 상태별: 3가지 status 카운트의 합 (filter 와 무관하게 전역 분포).
   const counts = useMemo(() => ({
     unreviewed: liveMode
       ? unreviewedHook.total
       : postings.filter(p => p.review_status === 'UNREVIEWED').length,
     status: liveMode
-      ? statusHook.total
+      ? (statusCounts.NEEDS_REVIEW + statusCounts.IN_PROGRESS + statusCounts.EXCLUDED)
       : postings.filter(p => p.review_status !== 'UNREVIEWED').length,
     logs: logs.length,
-  }), [liveMode, unreviewedHook.total, statusHook.total, postings, logs]);
+  }), [liveMode, unreviewedHook.total, statusCounts, postings, logs]);
 
   // ----- Detail modal (LIVE: content_html 보강 fetch) -----
   const handleOpenDetail = (p) => {
@@ -151,6 +170,7 @@ function App() {
             <StatusTab
               hook={statusHook}
               domains={domains}
+              statusCounts={statusCounts}
               onChangeReview={review.handleChangeReview}
               onChangeReviewBulk={review.handleChangeReviewBulk}
               onOpenDetail={handleOpenDetail}

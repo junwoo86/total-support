@@ -173,9 +173,19 @@ function sortByRelevance(a, b) {
 
 /* ============================================================
  * Tab 1 · Unreviewed
+ *
+ * 필터:
+ *   - 적합도 (relevance bucket — multi)
+ *       상(80↑) · 중상(60↑) · 중(40↑) · 하(40↓)
+ *   - 분야 (multi)
+ *   - 검색 (debounce 300ms)
+ * 정렬:
+ *   - 기본: 백엔드 ORDER BY (회사 적합도 DESC)
+ *   - D-Day 토글: 현재 화면 30건만 마감 가까운 순으로 클라이언트 재정렬
+ *     ("적합도 상 + 마감 임박" 같은 워크플로우용 — page 별 동작)
+ * 출처(site) 필터는 제거됨 (가치 낮고 칸 차지가 큼).
  * ============================================================ */
 function UnreviewedTab({ hook, domains, onChangeReview, onChangeReviewBulk, onOpenDetail, removingIds }) {
-  // hook: 백엔드 페이지네이션 + 정렬 + 필터. 클라이언트 sort/filter 없음.
   const { items, total, loading, filters, setFilters, loadMore, canLoadMore } = hook;
 
   // 검색은 디바운스 300ms 로 백엔드 호출 빈도 절제
@@ -196,11 +206,27 @@ function UnreviewedTab({ hook, domains, onChangeReview, onChangeReviewBulk, onOp
     }
   }, [pg.page, pg.totalPages, canLoadMore, loading]);
 
-  const { selectedIds, toggleOne, toggleAll, clear } = useRowSelection(pg.pageItems);
+  // D-Day 정렬 토글 — 현재 페이지(30건)만 클라이언트 재정렬.
+  // end_date 가까운 순. NULL/상시는 후순위.
+  const [sortByDDay, setSortByDDay] = useState(false);
+  const visibleRows = useMemo(() => {
+    if (!sortByDDay) return pg.pageItems;
+    const sorted = [...pg.pageItems].sort((a, b) => {
+      const ad = a.end_date ? MOCK.dDay(a.end_date) : Infinity;
+      const bd = b.end_date ? MOCK.dDay(b.end_date) : Infinity;
+      return ad - bd;
+    });
+    return sorted;
+  }, [pg.pageItems, sortByDDay]);
+
+  const { selectedIds, toggleOne, toggleAll, clear } = useRowSelection(visibleRows);
   const handleBulk = (newStatus) => {
     onChangeReviewBulk(Array.from(selectedIds), newStatus);
     clear();
   };
+
+  const bucketsValue = filters.relevance_bucket || [];
+  const domainValue  = filters.domain || [];
 
   return (
     <div>
@@ -211,36 +237,33 @@ function UnreviewedTab({ hook, domains, onChangeReview, onChangeReviewBulk, onOp
       <Toolbar>
         <Toolbar.Label>적합도</Toolbar.Label>
         <ChipGroup
-          value={filters.suitability || 'ALL'}
-          onChange={(v) => setFilters({ suitability: v === 'ALL' ? undefined : v })}
+          multiSelect
+          value={bucketsValue}
+          onChange={(arr) => setFilters({ relevance_bucket: arr.length ? arr : undefined })}
           options={[
-            { value: 'ALL', label: '전체' },
-            { value: 'HIGH', label: '상' },
-            { value: 'NORMAL', label: '일반' },
-          ]}
-        />
-        <Toolbar.Divider />
-        <Toolbar.Label>출처</Toolbar.Label>
-        <ChipGroup
-          value={filters.site || 'ALL'}
-          onChange={(v) => setFilters({ site: v === 'ALL' ? undefined : v })}
-          options={[
-            { value: 'ALL', label: '전체' },
-            { value: 'BIZINFO', label: SITE_LABEL.BIZINFO },
-            { value: 'IRIS', label: SITE_LABEL.IRIS },
-            { value: 'SBA', label: SITE_LABEL.SBA },
+            { value: 'high',     label: '상 (80%↑)' },
+            { value: 'mid_high', label: '중상 (60%↑)' },
+            { value: 'mid',      label: '중 (40%↑)' },
+            { value: 'low',      label: '하 (40%↓)' },
           ]}
         />
         <Toolbar.Divider />
         <Toolbar.Label>분야</Toolbar.Label>
         <DomainFilterChips
+          multiSelect
           domains={domains}
-          value={filters.domain || 'ALL'}
-          onChange={(v) => setFilters({ domain: v === 'ALL' ? undefined : v })}
+          value={domainValue}
+          onChange={(arr) => setFilters({ domain: arr.length ? arr : undefined })}
         />
         <Toolbar.Divider />
         <SearchPill value={queryDraft} onChange={setQueryDraft} placeholder="사업명 검색" />
         <Toolbar.Spacer />
+        <SortToggle
+          active={sortByDDay}
+          onToggle={() => setSortByDDay(v => !v)}
+          activeLabel="D-Day순 (현재 페이지)"
+          inactiveLabel="기본 정렬 (적합도)"
+        />
         <Toolbar.Count n={total} />
       </Toolbar>
 
@@ -258,7 +281,7 @@ function UnreviewedTab({ hook, domains, onChangeReview, onChangeReviewBulk, onOp
       )}
 
       <PostingsTable
-        rows={pg.pageItems}
+        rows={visibleRows}
         domains={domains}
         onChangeReview={onChangeReview}
         onOpenDetail={onOpenDetail}
@@ -283,12 +306,39 @@ function UnreviewedTab({ hook, domains, onChangeReview, onChangeReviewBulk, onOp
   );
 }
 
+/* 정렬 토글 버튼 — Toolbar 우측, "기본 정렬" / "D-Day순 (현재 페이지)" */
+function SortToggle({ active, onToggle, activeLabel, inactiveLabel }) {
+  return (
+    <button
+      className={`chip sort-toggle ${active ? 'active' : ''}`}
+      onClick={onToggle}
+      title="현재 페이지의 30건을 마감 가까운 순으로 재정렬"
+      style={{ marginRight: 8 }}
+    >
+      <span style={{ marginRight: 4 }}>{active ? '⏰' : '🔀'}</span>
+      {active ? activeLabel : inactiveLabel}
+    </button>
+  );
+}
+
 /* ============================================================
  * Tab 2 · Status Monitoring
+ *
+ * 필터:
+ *   - 상태 (multi: NEEDS_REVIEW + IN_PROGRESS + EXCLUDED) — 칩 옆 카운트 표시
+ *   - 분야 (multi)
+ *   - 검색 (debounce 300ms)
+ *   - 만료 자동 숨김 (적용 가능한 상태가 선택되었을 때만)
+ * 출처(site) 필터는 제거됨. statusCounts 는 부모(app.jsx) 에서 hook 으로
+ * 받아 칩 옆 숫자에 사용 — list fetch 와 무관하게 status 별 분포 표시.
  * ============================================================ */
-function StatusTab({ hook, domains, onChangeReview, onChangeReviewBulk, onOpenDetail, removingIds }) {
+function StatusTab({
+  hook, domains, statusCounts,
+  onChangeReview, onChangeReviewBulk, onOpenDetail, removingIds,
+}) {
   const { items, total, loading, filters, setFilters, loadMore, canLoadMore } = hook;
-  const status = filters.status || 'NEEDS_REVIEW';
+  // 초기값: ['NEEDS_REVIEW'] (가장 자주 보는 화면)
+  const statusValue = Array.isArray(filters.status) ? filters.status : [];
   const hideExpired = !!filters.hide_expired;
 
   const [queryDraft, setQueryDraft] = useState(filters.q || '');
@@ -312,12 +362,19 @@ function StatusTab({ hook, domains, onChangeReview, onChangeReviewBulk, onOpenDe
     clear();
   };
 
+  // 다중 status 모드에선 한 가지 status 행만 보이는 게 아니므로 모든 옵션 노출.
   const bulkOptions = [
     { value: 'UNREVIEWED',   label: '미검토로 되돌리기' },
     { value: 'NEEDS_REVIEW', label: '검토 필요로 이동' },
     { value: 'IN_PROGRESS',  label: '지원 진행으로 이동' },
     { value: 'EXCLUDED',     label: '제외로 이동' },
-  ].filter(o => o.value !== status);
+  ];
+
+  const expirable = statusValue.includes('NEEDS_REVIEW')
+                 || statusValue.includes('IN_PROGRESS')
+                 || statusValue.length === 0;
+
+  const domainValue = filters.domain || [];
 
   return (
     <div>
@@ -328,37 +385,27 @@ function StatusTab({ hook, domains, onChangeReview, onChangeReviewBulk, onOpenDe
       <Toolbar>
         <Toolbar.Label>상태</Toolbar.Label>
         <ChipGroup
-          value={status}
-          onChange={(v) => setFilters({ status: v })}
+          multiSelect
+          value={statusValue}
+          onChange={(arr) => setFilters({ status: arr.length ? arr : undefined })}
           options={[
-            { value: 'NEEDS_REVIEW', label: '검토 필요' },
-            { value: 'IN_PROGRESS',  label: '지원 진행' },
-            { value: 'EXCLUDED',     label: '제외' },
-          ]}
-        />
-        <Toolbar.Divider />
-        <Toolbar.Label>출처</Toolbar.Label>
-        <ChipGroup
-          value={filters.site || 'ALL'}
-          onChange={(v) => setFilters({ site: v === 'ALL' ? undefined : v })}
-          options={[
-            { value: 'ALL', label: '전체' },
-            { value: 'BIZINFO', label: SITE_LABEL.BIZINFO },
-            { value: 'IRIS', label: SITE_LABEL.IRIS },
-            { value: 'SBA', label: SITE_LABEL.SBA },
+            { value: 'NEEDS_REVIEW', label: '검토 필요', count: statusCounts.NEEDS_REVIEW },
+            { value: 'IN_PROGRESS',  label: '지원 진행', count: statusCounts.IN_PROGRESS },
+            { value: 'EXCLUDED',     label: '제외',     count: statusCounts.EXCLUDED },
           ]}
         />
         <Toolbar.Divider />
         <Toolbar.Label>분야</Toolbar.Label>
         <DomainFilterChips
+          multiSelect
           domains={domains}
-          value={filters.domain || 'ALL'}
-          onChange={(v) => setFilters({ domain: v === 'ALL' ? undefined : v })}
+          value={domainValue}
+          onChange={(arr) => setFilters({ domain: arr.length ? arr : undefined })}
         />
         <Toolbar.Divider />
         <SearchPill value={queryDraft} onChange={setQueryDraft} placeholder="사업명 검색" />
         <Toolbar.Spacer />
-        {status !== 'EXCLUDED' && (
+        {expirable && (
           <CheckboxRow
             checked={hideExpired}
             onChange={(v) => setFilters({ hide_expired: v })}

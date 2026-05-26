@@ -78,6 +78,35 @@
   border-radius: 2px;
   display: inline-block;
 }
+/* chip-count: 칩 라벨 옆 작은 배지 (예: "검토 필요 5"). */
+.chip .chip-count {
+  display: inline-block;
+  min-width: 18px;
+  padding: 1px 6px;
+  margin-left: 2px;
+  border-radius: var(--r-full);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  background: var(--stone);
+  color: var(--ink);
+  line-height: 1.4;
+  text-align: center;
+}
+.chip.active .chip-count {
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--canvas);
+}
+/* sort-toggle: 같은 chip 스타일을 재사용하되 미세하게 다른 톤 강조용. */
+.chip.sort-toggle {
+  border-color: var(--stone);
+  color: var(--charcoal);
+}
+.chip.sort-toggle.active {
+  background: var(--accent, #2563eb);
+  color: var(--canvas);
+  border-color: var(--accent, #2563eb);
+}
 
 /* ============================================================
  * Toolbar (filter row)

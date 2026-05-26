@@ -308,8 +308,47 @@ function TagInput({ tags, setTags, placeholder }) {
   );
 }
 
-/* Pill chip group — used for filters (적합도/출처/분야/상태/레벨) */
-function ChipGroup({ value, onChange, options }) {
+/* Pill chip group — 필터용 칩 (적합도/분야/상태/레벨)
+ *
+ * 모드 2가지:
+ *   - 단일 선택 (기본): value=string, onChange(newValue). "ALL" pseudo-option 패턴.
+ *   - 다중 선택 (multiSelect=true): value=string[], onChange(newValues[]). 빈 배열 = 전체.
+ *
+ * options[i].count 가 주어지면 라벨 옆에 작은 카운트 배지 (예: "검토 필요 5").
+ */
+function ChipGroup({ value, onChange, options, multiSelect = false }) {
+  if (multiSelect) {
+    const selected = Array.isArray(value) ? value : [];
+    const toggle = (v) => {
+      const has = selected.includes(v);
+      const next = has ? selected.filter(x => x !== v) : [...selected, v];
+      onChange(next);
+    };
+    const isAllOff = selected.length === 0;
+    return (
+      <div className="chip-group">
+        {options.map(o => {
+          const active = selected.includes(o.value);
+          // 아무것도 선택 안 됐을 때(=전체) 모든 칩을 dimmed-active 로 표시할 수도 있지만,
+          // 사용자가 명시적으로 클릭한 것만 active 로 두는 게 직관적.
+          return (
+            <button
+              key={o.value}
+              className={`chip ${active ? 'active' : ''} ${isAllOff ? 'all-off' : ''}`}
+              onClick={() => toggle(o.value)}
+              title={o.title}
+            >
+              {o.swatch && <span className="swatch" style={{ background: o.swatch }} />}
+              {o.label}
+              {typeof o.count === 'number' && (
+                <span className="chip-count">{o.count}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
   return (
     <div className="chip-group">
       {options.map(o => (
@@ -321,6 +360,9 @@ function ChipGroup({ value, onChange, options }) {
         >
           {o.swatch && <span className="swatch" style={{ background: o.swatch }} />}
           {o.label}
+          {typeof o.count === 'number' && (
+            <span className="chip-count">{o.count}</span>
+          )}
         </button>
       ))}
     </div>
@@ -418,14 +460,19 @@ function ConfirmModal({ open, title, message, confirmLabel = '확인', danger, o
 /* ============================================================
  * 8. Domain helpers — DomainFilterChips, DDayCell
  * ============================================================ */
-function DomainFilterChips({ domains, value, onChange }) {
+function DomainFilterChips({ domains, value, onChange, multiSelect = false }) {
+  // 다중 모드는 'ALL' pseudo 옵션이 의미 없으므로 (빈 선택 = ALL) 제외.
+  // 단일 모드는 기존 호환을 위해 ALL/NONE pseudo 옵션 유지.
+  const base = domains.filter(d => d.enabled).map(d => ({
+    value: d.label_ko, label: d.label_ko, swatch: d.color,
+  }));
+  if (multiSelect) {
+    const opts = [...base, { value: 'NONE', label: '미매칭' }];
+    return <ChipGroup value={value} onChange={onChange} options={opts} multiSelect />;
+  }
   const opts = [
     { value: 'ALL', label: '전체' },
-    ...domains.filter(d => d.enabled).map(d => ({
-      value: d.label_ko,
-      label: d.label_ko,
-      swatch: d.color,
-    })),
+    ...base,
     { value: 'NONE', label: '미매칭' },
   ];
   return <ChipGroup value={value} onChange={onChange} options={opts} />;
