@@ -149,6 +149,9 @@
     async putGuideline(content_md) {
       return jsend('PUT', '/api/grant/company-guideline', { content_md });
     },
+    async getGuidelineHistory() {
+      return jget('/api/grant/company-guideline/history');
+    },
   };
 
   // 백엔드 PostingListItem → 프론트 posting shape으로 (assigned_fields list/string 호환)

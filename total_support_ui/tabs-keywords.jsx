@@ -460,88 +460,202 @@ function KeywordEditModal({ mode, domain, initial, postings, onClose, onSubmit }
  * ============================================================ */
 function CompanyGuidelineCard() {
   const liveMode = window.API && window.API.LIVE_MODE;
-  const [content, setContent] = useState('');
-  const [version, setVersion] = useState(null);
+  const [current, setCurrent] = useState(null);  // {content_md, version, updated_at}
   const [loading, setLoading] = useState(liveMode);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
-  const [dirty, setDirty] = useState(false);
+  const [history, setHistory] = useState([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [expandedVersion, setExpandedVersion] = useState(null);
   const toast = useToast();
 
   useEffect(() => {
     if (!liveMode) { setLoading(false); return; }
     let cancelled = false;
     window.API.getGuideline()
-      .then(g => {
-        if (cancelled) return;
-        setContent(g.content_md || '');
-        setVersion(g.version);
-      })
+      .then(g => { if (!cancelled) setCurrent(g); })
       .catch(e => toast(`지침 로드 실패: ${e.message}`, 'error'))
       .finally(() => !cancelled && setLoading(false));
     return () => { cancelled = true; };
   }, [liveMode]);
 
-  const handleChange = (e) => { setContent(e.target.value); setDirty(true); };
+  const refreshHistory = () => {
+    if (!liveMode) return;
+    setHistoryLoading(true);
+    window.API.getGuidelineHistory()
+      .then(rows => setHistory(rows))
+      .catch(e => toast(`히스토리 로드 실패: ${e.message}`, 'error'))
+      .finally(() => setHistoryLoading(false));
+  };
+
+  const handleEdit = () => {
+    setDraft(current ? current.content_md : '');
+    setEditing(true);
+  };
+  const handleCancel = () => {
+    setDraft('');
+    setEditing(false);
+  };
   const handleSave = () => {
     if (!liveMode) {
-      toast('mock 모드 — 지침 저장은 LIVE 모드에서만 동작', 'warn');
-      setDirty(false);
+      toast('mock 모드 — LIVE 모드에서만 저장됩니다', 'warn');
+      return;
+    }
+    if (draft.trim() === (current ? current.content_md : '').trim()) {
+      toast('변경된 내용이 없습니다', 'info');
+      setEditing(false);
       return;
     }
     setSaving(true);
-    window.API.putGuideline(content)
+    window.API.putGuideline(draft)
       .then(g => {
-        setVersion(g.version);
-        setDirty(false);
+        setCurrent(g);
+        setEditing(false);
+        setDraft('');
         toast(`지침 저장 (v${g.version}) — 미검토 공고 자동 재평가 시작`, 'success');
+        if (historyOpen) refreshHistory();
       })
       .catch(e => toast(`저장 실패: ${e.message}`, 'error'))
       .finally(() => setSaving(false));
   };
+
+  const toggleHistory = () => {
+    const next = !historyOpen;
+    setHistoryOpen(next);
+    if (next && history.length === 0) refreshHistory();
+  };
+
+  const fmtTs = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const kst = new Date(d.getTime() + 9 * 3600 * 1000);
+    const pad = n => String(n).padStart(2, '0');
+    return `${kst.getUTCFullYear()}-${pad(kst.getUTCMonth() + 1)}-${pad(kst.getUTCDate())} ${pad(kst.getUTCHours())}:${pad(kst.getUTCMinutes())}`;
+  };
+
+  const isEmpty = !loading && (!current || !(current.content_md || '').trim());
 
   return (
     <div className="card flush" style={{ marginBottom: 16 }}>
       <div className="card-head">
         <h3>회사 지침 <b>· AI 적합도 평가</b></h3>
         <span style={{ fontSize: 13, color: 'var(--steel)' }}>
-          {version != null ? <>guideline_version <code>v{version}</code></> : (loading ? '로딩…' : '')}
+          {current != null
+            ? <>현재 <code>v{current.version}</code> · {fmtTs(current.updated_at)} KST</>
+            : (loading ? '로딩…' : '미설정')}
         </span>
       </div>
       <div style={{ padding: '0 16px 12px 16px' }}>
         <div style={{ fontSize: 12, color: 'var(--steel)', marginBottom: 8, lineHeight: 1.55 }}>
           회사 소개 + 진행하고 싶은 지원사업의 방향성을 적으세요. 저장하면 새로 수집되는
           공고와 <strong>아직 검토하지 않은</strong> 공고들의 적합도(0~100%)를 자동 재평가합니다.
-          검토를 시작한 공고의 historical 점수는 보존됩니다.
+          검토를 시작한 공고의 historical 점수는 보존됩니다. 저장할 때마다 새 version
+          으로 append 되며 과거 버전은 아래 '히스토리' 에서 다시 볼 수 있습니다.
         </div>
-        <textarea
-          className="guideline-textarea"
-          rows={6}
-          value={content}
-          onChange={handleChange}
-          disabled={loading || saving}
-          placeholder={"예) 우리 회사는 AI 기반 의료 진단 솔루션을 개발하는 시리즈 A 스타트업입니다.\n주력 분야: 영상 진단, 디지털 헬스케어, FDA/MFDS 인허가 지원.\n관심 사업: R&D 자금, 임상시험 비용 매칭, 글로벌 진출 지원."}
-          style={{
-            width: '100%',
-            padding: '10px 12px',
-            border: '1px solid var(--border, #cbd5e1)',
-            borderRadius: 6,
-            fontFamily: 'inherit',
-            fontSize: 13,
-            lineHeight: 1.55,
-            resize: 'vertical',
-            boxSizing: 'border-box',
-          }}
-        />
-        <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={handleSave}
-            disabled={loading || saving || !dirty}
-          >
-            {saving ? '저장 중…' : dirty ? '저장 (재평가 트리거)' : '저장됨'}
-          </Button>
-        </div>
+
+        {/* 현재 지침: 보기 모드 ↔ 편집 모드 토글 */}
+        {!editing ? (
+          <>
+            <div className="guideline-view"
+                 style={{
+                   minHeight: 60, maxHeight: 320, overflowY: 'auto',
+                   padding: '10px 12px',
+                   background: isEmpty ? '#fafafa' : 'var(--surface, #f8fafc)',
+                   border: '1px solid var(--border, #cbd5e1)', borderRadius: 6,
+                   fontFamily: 'inherit', fontSize: 13, lineHeight: 1.6,
+                   whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                   color: isEmpty ? 'var(--steel)' : 'var(--ink)',
+                 }}>
+              {loading
+                ? '로딩 중…'
+                : (isEmpty
+                    ? '(회사 지침 미설정 — 수정 버튼을 눌러 작성하세요)'
+                    : current.content_md)}
+            </div>
+            <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+              <Button size="sm" onClick={toggleHistory} disabled={!liveMode}>
+                {historyOpen ? '히스토리 접기 ▲' : `히스토리 보기 ▼${history.length ? ` (${history.length})` : ''}`}
+              </Button>
+              <Button variant="primary" size="sm" onClick={handleEdit} disabled={loading || !liveMode}>
+                {isEmpty ? '＋ 지침 작성' : '✎ 수정'}
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <textarea
+              className="guideline-textarea"
+              rows={10}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              disabled={saving}
+              placeholder={"예) 우리 회사는 AI 기반 의료 진단 솔루션을 개발하는 시리즈 A 스타트업입니다.\n주력 분야: 영상 진단, 디지털 헬스케어, FDA/MFDS 인허가 지원.\n관심 사업: R&D 자금, 임상시험 비용 매칭, 글로벌 진출 지원."}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                border: '1px solid var(--coral, #ff5a4e)',
+                borderRadius: 6,
+                fontFamily: 'inherit', fontSize: 13, lineHeight: 1.6,
+                resize: 'vertical', boxSizing: 'border-box',
+              }}
+            />
+            <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <Button size="sm" onClick={handleCancel} disabled={saving}>취소</Button>
+              <Button variant="primary" size="sm" onClick={handleSave} disabled={saving}>
+                {saving ? '저장 중…' : '저장 (새 버전 + 재평가 트리거)'}
+              </Button>
+            </div>
+          </>
+        )}
+
+        {/* 히스토리 섹션 */}
+        {historyOpen && (
+          <div className="guideline-history"
+               style={{ marginTop: 12, borderTop: '1px solid var(--border, #cbd5e1)', paddingTop: 12 }}>
+            <div style={{ fontSize: 12, color: 'var(--steel)', marginBottom: 8 }}>
+              {historyLoading ? '로딩 중…' : `총 ${history.length}개 버전`}
+            </div>
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0, maxHeight: 360, overflowY: 'auto' }}>
+              {history.map(h => {
+                const isCurrent = current && h.version === current.version;
+                const isExpanded = expandedVersion === h.version;
+                const preview = (h.content_md || '').slice(0, 80).replace(/\n/g, ' ');
+                return (
+                  <li key={h.id}
+                      style={{
+                        borderLeft: isCurrent ? '3px solid var(--coral, #ff5a4e)' : '3px solid var(--border, #cbd5e1)',
+                        padding: '6px 10px', marginBottom: 6,
+                        background: isCurrent ? '#fff5f4' : 'var(--surface, #f8fafc)',
+                        borderRadius: 4,
+                      }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+                         onClick={() => setExpandedVersion(isExpanded ? null : h.version)}>
+                      <code style={{ fontSize: 12, fontWeight: 600 }}>v{h.version}</code>
+                      {isCurrent && <span style={{ fontSize: 10, padding: '1px 6px', background: 'var(--coral)', color: 'white', borderRadius: 999 }}>현재</span>}
+                      <span style={{ fontSize: 11, color: 'var(--steel)' }}>{fmtTs(h.updated_at)} KST</span>
+                      <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--steel)' }}>{isExpanded ? '▲' : '▼'}</span>
+                    </div>
+                    {isExpanded ? (
+                      <pre style={{
+                        marginTop: 8, padding: '8px 10px',
+                        background: 'white', border: '1px solid var(--border)', borderRadius: 4,
+                        fontFamily: 'inherit', fontSize: 12, lineHeight: 1.55,
+                        whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 240, overflowY: 'auto',
+                      }}>{h.content_md || '(빈 지침)'}</pre>
+                    ) : (
+                      <div style={{ fontSize: 11, color: 'var(--steel)', marginTop: 4 }}>
+                        {preview}{(h.content_md || '').length > 80 ? '…' : ''}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );

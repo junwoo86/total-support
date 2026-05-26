@@ -241,7 +241,9 @@ class GrantSystemLog(Base):
 class GrantCompanyGuideline(Base):
     __tablename__ = "tb_grant_company_guideline"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)  # 1로 고정
+    # append-only — 매 수정 시 새 row INSERT, "현재" = MAX(version).
+    # id 컬럼은 nextval 시퀀스 default 가 이미 잡혀있어 별도 마이그레이션 불요.
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     content_md: Mapped[str] = mapped_column(Text, nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
     updated_at: Mapped[datetime] = mapped_column(

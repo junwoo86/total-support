@@ -207,6 +207,14 @@ class CompanyGuidelineOut(ORMModel):
     updated_at: datetime
 
 
+class CompanyGuidelineHistoryItem(ORMModel):
+    """히스토리 목록 항목 — content_md 까지 함께 (모달에서 펼쳐 보여줄 용도)."""
+    id: int
+    version: int
+    content_md: str
+    updated_at: datetime
+
+
 class CompanyGuidelinePut(BaseModel):
     content_md: str = Field(default="", max_length=10_000)
 

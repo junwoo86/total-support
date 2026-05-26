@@ -43,17 +43,37 @@ def test_get_returns_default_empty_guideline(client):
 
 
 def test_get_creates_row_if_missing():
-    """안전망: row 가 삭제되어도 get_current 가 자동 생성."""
+    """안전망: 테이블이 비어도 get_current 가 빈 row 자동 생성."""
     with SessionLocal() as db:
-        # 직접 DELETE 후 get_current 호출
+        # 모든 row 정리 후 get_current 호출
         from total_support.db import GrantCompanyGuideline
-        row = db.get(GrantCompanyGuideline, 1)
-        if row:
-            db.delete(row)
-            db.commit()
+        from sqlalchemy import delete
+        db.execute(delete(GrantCompanyGuideline))
+        db.commit()
         recovered = svc.get_current(db)
-        assert recovered.id == 1
         assert recovered.content_md == ""
+        assert recovered.version == 1
+        # 다시 호출하면 같은 row (새로 안 만듦)
+        again = svc.get_current(db)
+        assert again.id == recovered.id
+
+
+def test_list_history_returns_descending_by_version():
+    """히스토리 — 최신 version 이 첫 번째."""
+    with SessionLocal() as db:
+        rows = svc.list_history(db)
+        if len(rows) >= 2:
+            for i in range(len(rows) - 1):
+                assert rows[i].version >= rows[i + 1].version
+
+
+def test_history_api_endpoint(client):
+    r = client.get("/api/grant/company-guideline/history")
+    assert r.status_code == 200
+    body = r.json()
+    assert isinstance(body, list)
+    for item in body:
+        assert set(item.keys()) >= {"id", "version", "content_md", "updated_at"}
 
 
 # ============================================================

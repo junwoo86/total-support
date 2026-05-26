@@ -15,7 +15,11 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from total_support.api.deps import get_db
-from total_support.api.schemas import CompanyGuidelineOut, CompanyGuidelinePut
+from total_support.api.schemas import (
+    CompanyGuidelineHistoryItem,
+    CompanyGuidelineOut,
+    CompanyGuidelinePut,
+)
 from total_support.db import GrantCompanyGuideline
 from total_support.services import guidelines as svc
 
@@ -35,3 +39,11 @@ def put_guideline(
     db: Annotated[Session, Depends(get_db)],
 ) -> GrantCompanyGuideline:
     return svc.update_content(db, content_md=body.content_md)
+
+
+@router.get("/history", response_model=list[CompanyGuidelineHistoryItem])
+def get_history(
+    db: Annotated[Session, Depends(get_db)],
+) -> list[GrantCompanyGuideline]:
+    """모든 버전 (최신 → 과거). append-only 테이블에서 그대로 조회."""
+    return svc.list_history(db)

@@ -30,49 +30,75 @@ class GuidelineSnapshot:
 
 
 def get_current_guideline_for_eval() -> GuidelineSnapshot | None:
-    """수집 시점 평가용 — 빈 지침이거나 미존재면 None."""
+    """수집 시점 평가용 — 빈 지침이거나 미존재면 None.
+
+    Append-only 패턴: "현재" = ORDER BY version DESC LIMIT 1.
+    """
     with SessionLocal() as db:
-        row = db.get(GrantCompanyGuideline, 1)
+        row = _current_row(db)
         if not row or not (row.content_md or "").strip():
             return None
         return GuidelineSnapshot(content_md=row.content_md, version=row.version)
+
+
+def _current_row(db: Session) -> GrantCompanyGuideline | None:
+    """append-only 테이블에서 최신 row 반환."""
+    return db.execute(
+        select(GrantCompanyGuideline)
+        .order_by(GrantCompanyGuideline.version.desc())
+        .limit(1)
+    ).scalar_one_or_none()
 
 
 # ============================================================
 # CRUD (API 라우터에서 사용)
 # ============================================================
 def get_current(db: Session) -> GrantCompanyGuideline:
-    """단일 row 반환. 마이그레이션 003 에서 빈 row 가 INSERT 되었음."""
-    row = db.get(GrantCompanyGuideline, 1)
+    """현재값 = 최대 version row. 비어있으면 v1 빈 row 자동 생성."""
+    row = _current_row(db)
     if row is None:
-        # 안전망 — 마이그레이션 외 경로로 row 가 사라진 경우 자동 생성
-        row = GrantCompanyGuideline(id=1, content_md="", version=1)
+        row = GrantCompanyGuideline(content_md="", version=1)
         db.add(row)
         db.commit()
         db.refresh(row)
     return row
 
 
-def update_content(db: Session, *, content_md: str) -> GrantCompanyGuideline:
-    """지침 본문 수정. 내용이 실제로 바뀌면 version +1 + UNREVIEWED 재평가 큐.
+def list_history(db: Session, *, limit: int = 50) -> list[GrantCompanyGuideline]:
+    """모든 버전 히스토리 (최신 → 과거)."""
+    return list(
+        db.execute(
+            select(GrantCompanyGuideline)
+            .order_by(GrantCompanyGuideline.version.desc())
+            .limit(limit)
+        ).scalars()
+    )
 
-    Returns: 갱신된 row (caller 는 row.version 으로 백필 대상 식별 가능).
+
+def update_content(db: Session, *, content_md: str) -> GrantCompanyGuideline:
+    """지침 본문 수정 — **새 row INSERT** (append-only, 과거 보존).
+
+    내용이 이전 version 과 동일하면 no-op. 변경되면 version +1 으로 새 row
+    적재 + UNREVIEWED 공고 자동 재평가 트리거.
     """
-    row = get_current(db)
+    current = get_current(db)
     new_md = (content_md or "").strip()
 
-    if new_md == (row.content_md or "").strip():
-        return row  # no-op
+    if new_md == (current.content_md or "").strip():
+        return current  # no-op — 동일 본문이면 새 row 안 만든다
 
-    row.content_md = new_md
-    row.version = row.version + 1
-    row.updated_at = datetime.now(timezone.utc)
+    new_row = GrantCompanyGuideline(
+        content_md=new_md,
+        version=current.version + 1,
+        updated_at=datetime.now(timezone.utc),
+    )
+    db.add(new_row)
     db.commit()
-    db.refresh(row)
+    db.refresh(new_row)
 
     # UNREVIEWED 공고 재평가는 백그라운드 스레드로 — 라우터 응답 차단 X
-    _trigger_reevaluation_async(new_version=row.version)
-    return row
+    _trigger_reevaluation_async(new_version=new_row.version)
+    return new_row
 
 
 # ============================================================
