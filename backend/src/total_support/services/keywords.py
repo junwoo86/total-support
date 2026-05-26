@@ -2,14 +2,23 @@
 
 PRD §5.5.3: 매처 4모드(WORD_BOUNDARY / EXACT_HANGUL / SUBSTRING / REGEX)
 + negative_context 좌우 30자 윈도우. REGEX 모드만 컴파일 사전 검증.
+
+CRUD 후처리 — 키워드 정책이 바뀌면 keyword_version_seq 트리거(DB 측)가
+시퀀스를 +1 하고, 본 모듈이 백그라운드 스레드로 screening backfill 을
+즉시 실행한다 (회사 지침 backfill 패턴과 동일 — 빈번 호출 시 lock 으로
+중복 방지). 매칭은 순수 Python 정규식이라 800+ 공고도 수 초 안에 끝남.
 """
 
 from __future__ import annotations
 
+import logging
 import re
+import threading
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from total_support.api.schemas import (
     KeywordCreate,
@@ -22,6 +31,43 @@ from total_support.db import GrantDomain, GrantKeyword, GrantPosting
 from total_support.screening import KeywordSpec, screen
 from total_support.screening.matcher import build_pattern
 from total_support.services.exceptions import InvalidPatternError, NotFoundError
+
+
+# ============================================================
+# Screening backfill 자동 트리거 — keyword/domain CRUD 후처리
+# ============================================================
+_BACKFILL_LOCK = threading.Lock()
+_BACKFILL_THREAD: threading.Thread | None = None
+
+
+def trigger_screening_backfill_async() -> None:
+    """screening/backfill.run_backfill() 을 데몬 스레드로 실행.
+
+    이미 백필이 도는 중이면 skip — 그 백필이 끝나기 전에 새 키워드 정책이
+    들어와도 어차피 run_backfill 이 latest_version 까지 한 번에 처리하므로
+    추가 트리거는 불필요.
+    """
+    global _BACKFILL_THREAD
+    with _BACKFILL_LOCK:
+        if _BACKFILL_THREAD is not None and _BACKFILL_THREAD.is_alive():
+            logger.info("screening backfill already running — skip new trigger")
+            return
+        t = threading.Thread(
+            target=_run_backfill_safely,
+            daemon=True,
+            name="screening-backfill",
+        )
+        _BACKFILL_THREAD = t
+        t.start()
+
+
+def _run_backfill_safely() -> None:
+    from total_support.screening.backfill import run_backfill
+    try:
+        result = run_backfill()
+        logger.info("screening backfill done: %s", result)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("screening backfill failed: %s", e)
 
 
 # ============================================================
@@ -55,6 +101,7 @@ def create(db: Session, domain_id: int, body: KeywordCreate) -> GrantKeyword:
     db.add(row)
     db.commit()
     db.refresh(row)
+    trigger_screening_backfill_async()
     return row
 
 
@@ -75,6 +122,7 @@ def patch(
         setattr(row, k, v)
     db.commit()
     db.refresh(row)
+    trigger_screening_backfill_async()
     return row
 
 
@@ -84,6 +132,7 @@ def delete(db: Session, domain_id: int, keyword_id: int) -> None:
         raise NotFoundError("키워드를 찾을 수 없습니다")
     db.delete(row)
     db.commit()
+    trigger_screening_backfill_async()
 
 
 # ============================================================

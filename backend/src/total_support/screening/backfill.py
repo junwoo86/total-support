@@ -60,12 +60,21 @@ def run_backfill() -> dict[str, Any]:
     total_scanned = 0
     total_updated = 0
 
+    # 백필 대상은 검토 시작 전 상태(UNREVIEWED) + 검토 필요(NEEDS_REVIEW) 뿐.
+    # 사용자가 이미 검토를 시작했거나(IN_PROGRESS) 제외 결정한(EXCLUDED)
+    # 행은 historical assigned_fields/ai_suitability 를 보존한다.
+    # 회사 지침 backfill 과 동일 정책 + 800+ 누적 시 부담 절제.
+    _BACKFILL_TARGET_STATUSES = ("UNREVIEWED", "NEEDS_REVIEW")
+
     while True:
         with SessionLocal() as db:
             ids = list(
                 db.execute(
                     select(GrantPosting.id)
-                    .where(GrantPosting.screened_with_version < latest_version)
+                    .where(
+                        GrantPosting.screened_with_version < latest_version,
+                        GrantPosting.review_status.in_(_BACKFILL_TARGET_STATUSES),
+                    )
                     .limit(batch_size)
                 ).scalars()
             )
@@ -78,9 +87,15 @@ def run_backfill() -> dict[str, Any]:
                 ).scalars()
             )
 
+            # 본문 노이즈(푸터·메뉴·사이드바) 가 키워드 매처에 섞이지 않도록
+            # _trim_body_html 로 site 별 본문 fragment 만 추출. detail/preview
+            # /guideline backfill 과 동일한 처리.
+            from total_support.services.postings import _trim_body_html
+
             updates: list[dict[str, Any]] = []
             for p in postings:
-                text_corpus = (p.title or "") + "\n" + _strip_html(p.content_html or "")
+                trimmed = _trim_body_html(p.source_site, p.content_html or "")
+                text_corpus = (p.title or "") + "\n" + _strip_html(trimmed or "")
                 result = screen(text_corpus, kw_specs)
                 old_fields = p.assigned_fields or ""
                 new_fields = result.assigned_fields or ""

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from total_support.api.schemas import DomainCreate, DomainPatch
 from total_support.db import GrantDomain
 from total_support.services.exceptions import DuplicateError, NotFoundError
+from total_support.services.keywords import trigger_screening_backfill_async
 
 
 def list_all(db: Session, *, include_disabled: bool = True) -> list[GrantDomain]:
@@ -38,6 +39,7 @@ def create(db: Session, body: DomainCreate) -> GrantDomain:
         db.rollback()
         raise DuplicateError(f"code 중복 또는 제약 위반: {e.orig}") from e
     db.refresh(row)
+    trigger_screening_backfill_async()
     return row
 
 
@@ -50,6 +52,7 @@ def patch(db: Session, domain_id: int, body: DomainPatch) -> GrantDomain:
         setattr(row, k, v)
     db.commit()
     db.refresh(row)
+    trigger_screening_backfill_async()
     return row
 
 
@@ -66,3 +69,4 @@ def delete(db: Session, domain_id: int, *, hard: bool) -> None:
     else:
         row.enabled = False
     db.commit()
+    trigger_screening_backfill_async()
