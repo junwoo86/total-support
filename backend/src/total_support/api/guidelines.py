@@ -38,7 +38,9 @@ def put_guideline(
     body: CompanyGuidelinePut,
     db: Annotated[Session, Depends(get_db)],
 ) -> GrantCompanyGuideline:
-    return svc.update_content(db, content_md=body.content_md)
+    return svc.update_content(
+        db, content_md=body.content_md, trigger_backfill=body.reevaluate,
+    )
 
 
 @router.get("/history", response_model=list[CompanyGuidelineHistoryItem])

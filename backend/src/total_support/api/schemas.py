@@ -217,6 +217,9 @@ class CompanyGuidelineHistoryItem(ORMModel):
 
 class CompanyGuidelinePut(BaseModel):
     content_md: str = Field(default="", max_length=10_000)
+    # True (기본): 저장 + UNREVIEWED 공고 자동 재평가 백그라운드 시작.
+    # False       : 저장만 하고 백필 트리거 X (점수 보존). 사소한 표현 수정·오타 정정 등.
+    reevaluate: bool = True
 
 
 # ============================================================

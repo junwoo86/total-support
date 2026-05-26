@@ -101,13 +101,13 @@ function App() {
             신규 미검토 <span className="count-pill">{counts.unreviewed}</span>
           </button>
           <button className={`tab-btn ${tab === 'status' ? 'active' : ''}`} onClick={() => setTab('status')}>
-            상태별 모니터링 <span className="count-pill">{counts.status}</span>
-          </button>
-          <button className={`tab-btn ${tab === 'health' ? 'active' : ''}`} onClick={() => setTab('health')}>
-            헬스 모니터
+            검토 상태별 확인 <span className="count-pill">{counts.status}</span>
           </button>
           <button className={`tab-btn ${tab === 'keywords' ? 'active' : ''}`} onClick={() => setTab('keywords')}>
             분야 · 키워드 관리
+          </button>
+          <button className={`tab-btn ${tab === 'health' ? 'active' : ''}`} onClick={() => setTab('health')}>
+            사이트별 수집 상태
           </button>
           <button className={`tab-btn ${tab === 'logs' ? 'active' : ''}`} onClick={() => setTab('logs')}>
             시스템 로그 <span className="count-pill">{counts.logs}</span>

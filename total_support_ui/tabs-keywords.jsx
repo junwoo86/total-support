@@ -32,10 +32,10 @@ function KeywordsTab({
     <div>
       <SectionHead
         title="분야 · 키워드 관리"
-        sub="코드 배포 없이 분야와 매칭 키워드를 추가 · 수정 · 비활성화"
+        sub="대시보드에서 어떤 사업을 어떤 분야로 분류할지 정하는 곳 — 분야와 매칭 키워드를 추가하면 새로 수집되는 공고와 아직 검토하지 않은 공고에 자동 반영됩니다"
         actions={
           <span style={{ fontSize: 13, color: 'var(--steel)' }}>
-            keyword_version <code>v{keywordVersion}</code>
+            키워드 버전 <code>v{keywordVersion}</code>
           </span>
         }
       />
@@ -498,7 +498,7 @@ function CompanyGuidelineCard() {
     setDraft('');
     setEditing(false);
   };
-  const handleSave = () => {
+  const handleSave = (reevaluate) => {
     if (!liveMode) {
       toast('mock 모드 — LIVE 모드에서만 저장됩니다', 'warn');
       return;
@@ -509,12 +509,15 @@ function CompanyGuidelineCard() {
       return;
     }
     setSaving(true);
-    window.API.putGuideline(draft)
+    window.API.putGuideline(draft, { reevaluate })
       .then(g => {
         setCurrent(g);
         setEditing(false);
         setDraft('');
-        toast(`지침 저장 (v${g.version}) — 미검토 공고 자동 재평가 시작`, 'success');
+        const msg = reevaluate
+          ? `지침 저장 (v${g.version}) — 미검토 공고 자동 재평가 시작`
+          : `지침 저장 (v${g.version}) — 재평가는 진행하지 않음 (기존 점수 유지)`;
+        toast(msg, 'success');
         if (historyOpen) refreshHistory();
       })
       .catch(e => toast(`저장 실패: ${e.message}`, 'error'))
@@ -552,8 +555,8 @@ function CompanyGuidelineCard() {
         <div style={{ fontSize: 12, color: 'var(--steel)', marginBottom: 8, lineHeight: 1.55 }}>
           회사 소개 + 진행하고 싶은 지원사업의 방향성을 적으세요. 저장하면 새로 수집되는
           공고와 <strong>아직 검토하지 않은</strong> 공고들의 적합도(0~100%)를 자동 재평가합니다.
-          검토를 시작한 공고의 historical 점수는 보존됩니다. 저장할 때마다 새 version
-          으로 append 되며 과거 버전은 아래 '히스토리' 에서 다시 볼 수 있습니다.
+          검토를 시작한 공고의 과거 점수는 보존됩니다. 저장할 때마다 새 버전으로 누적되며
+          과거 버전은 아래 '히스토리' 에서 다시 볼 수 있습니다.
         </div>
 
         {/* 현재 지침: 보기 모드 ↔ 편집 모드 토글 */}
@@ -602,11 +605,27 @@ function CompanyGuidelineCard() {
                 resize: 'vertical', boxSizing: 'border-box',
               }}
             />
-            <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
               <Button size="sm" onClick={handleCancel} disabled={saving}>취소</Button>
-              <Button variant="primary" size="sm" onClick={handleSave} disabled={saving}>
-                {saving ? '저장 중…' : '저장 (새 버전 + 재평가 트리거)'}
-              </Button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => handleSave(true)}
+                  disabled={saving}
+                  title="새 버전 저장 + 아직 검토하지 않은 공고들의 적합도를 새 지침으로 즉시 재평가합니다"
+                >
+                  {saving ? '저장 중…' : '저장 (새 버전 + 미검토 전수 재평가)'}
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => handleSave(false)}
+                  disabled={saving}
+                  title="지침만 새 버전으로 저장하고 기존 점수는 그대로 유지합니다 (사소한 표현 수정 시)"
+                >
+                  저장 (재평가 X)
+                </Button>
+              </div>
             </div>
           </>
         )}

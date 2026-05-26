@@ -75,11 +75,16 @@ def list_history(db: Session, *, limit: int = 50) -> list[GrantCompanyGuideline]
     )
 
 
-def update_content(db: Session, *, content_md: str) -> GrantCompanyGuideline:
+def update_content(
+    db: Session, *, content_md: str, trigger_backfill: bool = True,
+) -> GrantCompanyGuideline:
     """지침 본문 수정 — **새 row INSERT** (append-only, 과거 보존).
 
-    내용이 이전 version 과 동일하면 no-op. 변경되면 version +1 으로 새 row
-    적재 + UNREVIEWED 공고 자동 재평가 트리거.
+    Args:
+        content_md: 새 본문. 이전 version 과 동일하면 no-op.
+        trigger_backfill: True (기본) → UNREVIEWED 공고 자동 재평가 백그라운드 시작.
+                          False → 새 row 만 저장하고 평가는 건드리지 않음
+                          (사소한 표현 수정·오타 정정 시).
     """
     current = get_current(db)
     new_md = (content_md or "").strip()
@@ -96,8 +101,9 @@ def update_content(db: Session, *, content_md: str) -> GrantCompanyGuideline:
     db.commit()
     db.refresh(new_row)
 
-    # UNREVIEWED 공고 재평가는 백그라운드 스레드로 — 라우터 응답 차단 X
-    _trigger_reevaluation_async(new_version=new_row.version)
+    if trigger_backfill:
+        # UNREVIEWED 공고 재평가는 백그라운드 스레드로 — 라우터 응답 차단 X
+        _trigger_reevaluation_async(new_version=new_row.version)
     return new_row
 
 

@@ -3,11 +3,27 @@ sanitize + parse_period + screen + upsert 풀 사이클을 검증.
 
 라이브 사이트는 호출하지 않는다. BizinfoScraper의 iter_listing_pages /
 fetch_detail을 monkeypatch로 교체해 100% 결정적 검증.
+
+⚠️ 안전 가드 (2026-05-26): 이 파일은 scraper.run() 을 실제로 호출하며,
+run() 내부에서 새 SessionLocal() 을 띄워 conftest 의 `_isolate_db`
+transaction 격리를 우회할 수 있다 (다른 connection · 별 트랜잭션).
+운영 DB 손상 위험이 있으므로 기본은 SKIP. 활성화하려면 환경변수
+`TS_RUN_L3=1` 설정 후 별도 테스트 DB 에서만 실행할 것.
 """
 
 from __future__ import annotations
 
+import os
+
 import pytest
+
+pytestmark = pytest.mark.skipif(
+    os.getenv("TS_RUN_L3") != "1",
+    reason=(
+        "L3 통합 테스트는 운영 DB 에 직접 INSERT 가능 — "
+        "TS_RUN_L3=1 + 별도 테스트 DB 환경에서만 실행"
+    ),
+)
 from sqlalchemy import select, text
 
 from total_support.db import (

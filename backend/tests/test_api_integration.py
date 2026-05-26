@@ -10,7 +10,10 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.conftest import LIVE_DB_GUARD_ENABLED, LIVE_DB_GUARD_REASON
 from total_support.api.main import app
+
+pytestmark = pytest.mark.skipif(LIVE_DB_GUARD_ENABLED, reason=LIVE_DB_GUARD_REASON)
 
 
 @pytest.fixture(scope="module")

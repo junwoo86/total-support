@@ -11,6 +11,10 @@ import uuid
 
 import pytest
 
+from tests.conftest import LIVE_DB_GUARD_ENABLED, LIVE_DB_GUARD_REASON
+
+pytestmark = pytest.mark.skipif(LIVE_DB_GUARD_ENABLED, reason=LIVE_DB_GUARD_REASON)
+
 from total_support.api.schemas import (
     DomainCreate,
     DomainPatch,

@@ -146,8 +146,9 @@
     async getGuideline() {
       return jget('/api/grant/company-guideline');
     },
-    async putGuideline(content_md) {
-      return jsend('PUT', '/api/grant/company-guideline', { content_md });
+    async putGuideline(content_md, opts = {}) {
+      const reevaluate = opts.reevaluate !== false;  // 기본 true
+      return jsend('PUT', '/api/grant/company-guideline', { content_md, reevaluate });
     },
     async getGuidelineHistory() {
       return jget('/api/grant/company-guideline/history');

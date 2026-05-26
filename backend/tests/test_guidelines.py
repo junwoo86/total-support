@@ -10,9 +10,12 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.conftest import LIVE_DB_GUARD_ENABLED, LIVE_DB_GUARD_REASON
 from total_support.api.main import app
 from total_support.db import SessionLocal
 from total_support.services import guidelines as svc
+
+pytestmark = pytest.mark.skipif(LIVE_DB_GUARD_ENABLED, reason=LIVE_DB_GUARD_REASON)
 
 
 @pytest.fixture(scope="module")
@@ -20,14 +23,9 @@ def client() -> TestClient:
     return TestClient(app)
 
 
-@pytest.fixture(autouse=True)
-def _reset_guideline_after_each():
-    """각 테스트 끝에 빈 지침으로 복원 — 다른 테스트 영향 방지."""
-    yield
-    with SessionLocal() as db:
-        # _trigger_reevaluation_async 가 백그라운드 스레드를 띄울 수 있으니 patch
-        with patch.object(svc, "_trigger_reevaluation_async", return_value=None):
-            svc.update_content(db, content_md="")
+# 이전에는 여기에 백업/복원 fixture 가 있었지만, conftest.py 의 `_isolate_db`
+# 가 SAVEPOINT + rollback + SessionLocal monkeypatch 로 모든 변경을 운영 DB
+# 디스크에 닿기 전에 차단하므로 더 이상 필요 없음.
 
 
 # ============================================================
@@ -37,7 +35,8 @@ def test_get_returns_default_empty_guideline(client):
     r = client.get("/api/grant/company-guideline")
     assert r.status_code == 200
     body = r.json()
-    assert body["id"] == 1
+    # id 는 autoincrement (append-only) 라 특정 값 가정 X.
+    assert isinstance(body["id"], int) and body["id"] >= 1
     assert "content_md" in body
     assert isinstance(body["version"], int)
 
