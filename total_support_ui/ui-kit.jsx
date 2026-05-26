@@ -552,11 +552,16 @@ function usePagination(items, pageSize = 30) {
   };
 }
 
-function Pagination({ page, totalPages, total, showingFrom, showingTo, onChange }) {
+function Pagination({
+  page, totalPages, total, showingFrom, showingTo, onChange,
+  // 서버 페이지네이션 — 메모리에 로드된 건수 + "더 불러오기" 옵션
+  loadedCount, canLoadMore, loading, onLoadMore,
+}) {
   if (total === 0) return null;
   const go = (p) => onChange(Math.max(1, Math.min(totalPages, p)));
   const canPrev = page > 1;
   const canNext = page < totalPages;
+  const hasServerPaging = typeof loadedCount === 'number' && typeof onLoadMore === 'function';
 
   // 페이지 번호 윈도우 (현재 페이지 기준 ±2)
   const windowSize = 5;
@@ -570,8 +575,24 @@ function Pagination({ page, totalPages, total, showingFrom, showingTo, onChange 
     <div className="pagination">
       <span className="pagination-info">
         <b>{showingFrom}–{showingTo}</b> / {total}건
+        {hasServerPaging && loadedCount < total && (
+          <span style={{ marginLeft: 8, color: 'var(--steel)', fontSize: 11 }}>
+            (지금 {loadedCount}건 로드됨{loading ? ' · 불러오는 중…' : ''})
+          </span>
+        )}
       </span>
       <span className="pagination-spacer" />
+      {hasServerPaging && canLoadMore && (
+        <button
+          className="pg-btn"
+          onClick={onLoadMore}
+          disabled={loading}
+          title={`다음 200건 추가로 불러오기 (남은 ${Math.max(0, total - loadedCount)}건)`}
+          style={{ marginRight: 8 }}
+        >
+          {loading ? '불러오는 중…' : '＋ 더 불러오기'}
+        </button>
+      )}
       <button className="pg-btn" onClick={() => go(1)} disabled={!canPrev} title="처음">«</button>
       <button className="pg-btn" onClick={() => go(page - 1)} disabled={!canPrev} title="이전">‹</button>
       {from > 1 && <span className="pg-ellipsis">…</span>}

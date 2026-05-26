@@ -94,6 +94,21 @@
     },
 
     // ----- Postings -----
+    /** 서버 페이지네이션 + 백엔드 필터·정렬.
+     *  opts 예: { status, suitability, site, domain, q, hide_expired, page, page_size } */
+    async fetchPostings(opts = {}) {
+      const params = {};
+      for (const [k, v] of Object.entries(opts)) {
+        if (v == null || v === '' || v === false) continue;
+        if (v === true) { params[k] = 'true'; continue; }
+        if (k === 'domain' && (v === 'ALL' || v === 'NONE')) continue;
+        if (v === 'ALL') continue;
+        params[k] = v;
+      }
+      const res = await jget('/api/grant/postings', params);
+      // {items, total, page, page_size}
+      return { ...res, items: res.items.map(normalizePosting) };
+    },
     async patchReviewStatus(id, status) {
       return jsend('PATCH', `/api/grant/postings/${id}/review-status`, { status });
     },

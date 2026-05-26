@@ -174,24 +174,28 @@ function sortByRelevance(a, b) {
 /* ============================================================
  * Tab 1 · Unreviewed
  * ============================================================ */
-function UnreviewedTab({ postings, domains, onChangeReview, onChangeReviewBulk, onOpenDetail, removingIds }) {
-  const [suitability, setSuitability] = useState('ALL');
-  const [site, setSite] = useState('ALL');
-  const [domain, setDomain] = useState('ALL');
-  const [query, setQuery] = useState('');
+function UnreviewedTab({ hook, domains, onChangeReview, onChangeReviewBulk, onOpenDetail, removingIds }) {
+  // hook: 백엔드 페이지네이션 + 정렬 + 필터. 클라이언트 sort/filter 없음.
+  const { items, total, loading, filters, setFilters, loadMore, canLoadMore } = hook;
 
-  const rows = useMemo(() => {
-    return postings.filter(p =>
-      p.review_status === 'UNREVIEWED' &&
-      (suitability === 'ALL' || p.ai_suitability === suitability) &&
-      (site === 'ALL' || p.source_site === site) &&
-      applyDomainFilter(p, domain) &&
-      applySearch(p, query)
-    ).sort(sortByRelevance);
-  }, [postings, suitability, site, domain, query]);
+  // 검색은 디바운스 300ms 로 백엔드 호출 빈도 절제
+  const [queryDraft, setQueryDraft] = useState(filters.q || '');
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if ((filters.q || '') !== queryDraft) setFilters({ q: queryDraft || undefined });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [queryDraft]);
 
-  // 30개씩 페이징 (대시보드 무한 노출 방지)
-  const pg = usePagination(rows, 30);
+  // 30개씩 페이징은 "이미 로드된 items 안에서" 동작.
+  // 마지막 페이지에 도달하면 자동으로 다음 200건 fetch.
+  const pg = usePagination(items, 30);
+  useEffect(() => {
+    if (pg.page === pg.totalPages && canLoadMore && !loading) {
+      loadMore();
+    }
+  }, [pg.page, pg.totalPages, canLoadMore, loading]);
+
   const { selectedIds, toggleOne, toggleAll, clear } = useRowSelection(pg.pageItems);
   const handleBulk = (newStatus) => {
     onChangeReviewBulk(Array.from(selectedIds), newStatus);
@@ -207,8 +211,8 @@ function UnreviewedTab({ postings, domains, onChangeReview, onChangeReviewBulk, 
       <Toolbar>
         <Toolbar.Label>적합도</Toolbar.Label>
         <ChipGroup
-          value={suitability}
-          onChange={setSuitability}
+          value={filters.suitability || 'ALL'}
+          onChange={(v) => setFilters({ suitability: v === 'ALL' ? undefined : v })}
           options={[
             { value: 'ALL', label: '전체' },
             { value: 'HIGH', label: '상' },
@@ -218,8 +222,8 @@ function UnreviewedTab({ postings, domains, onChangeReview, onChangeReviewBulk, 
         <Toolbar.Divider />
         <Toolbar.Label>출처</Toolbar.Label>
         <ChipGroup
-          value={site}
-          onChange={setSite}
+          value={filters.site || 'ALL'}
+          onChange={(v) => setFilters({ site: v === 'ALL' ? undefined : v })}
           options={[
             { value: 'ALL', label: '전체' },
             { value: 'BIZINFO', label: SITE_LABEL.BIZINFO },
@@ -229,11 +233,15 @@ function UnreviewedTab({ postings, domains, onChangeReview, onChangeReviewBulk, 
         />
         <Toolbar.Divider />
         <Toolbar.Label>분야</Toolbar.Label>
-        <DomainFilterChips domains={domains} value={domain} onChange={setDomain} />
+        <DomainFilterChips
+          domains={domains}
+          value={filters.domain || 'ALL'}
+          onChange={(v) => setFilters({ domain: v === 'ALL' ? undefined : v })}
+        />
         <Toolbar.Divider />
-        <SearchPill value={query} onChange={setQuery} placeholder="사업명 / 요약 검색" />
+        <SearchPill value={queryDraft} onChange={setQueryDraft} placeholder="사업명 검색" />
         <Toolbar.Spacer />
-        <Toolbar.Count n={rows.length} />
+        <Toolbar.Count n={total} />
       </Toolbar>
 
       {selectedIds.size > 0 && (
@@ -262,10 +270,14 @@ function UnreviewedTab({ postings, domains, onChangeReview, onChangeReviewBulk, 
       <Pagination
         page={pg.page}
         totalPages={pg.totalPages}
-        total={pg.total}
+        total={total}
         showingFrom={pg.showingFrom}
         showingTo={pg.showingTo}
         onChange={pg.setPage}
+        loadedCount={items.length}
+        canLoadMore={canLoadMore}
+        loading={loading}
+        onLoadMore={loadMore}
       />
     </div>
   );
@@ -274,74 +286,61 @@ function UnreviewedTab({ postings, domains, onChangeReview, onChangeReviewBulk, 
 /* ============================================================
  * Tab 2 · Status Monitoring
  * ============================================================ */
-function StatusTab({ postings, domains, onChangeReview, onChangeReviewBulk, onOpenDetail, removingIds }) {
-  const [status, setStatus] = useState('NEEDS_REVIEW');
-  const [hideExpired, setHideExpired] = useState(true);
-  const [site, setSite] = useState('ALL');
-  const [domain, setDomain] = useState('ALL');
-  const [query, setQuery] = useState('');
+function StatusTab({ hook, domains, onChangeReview, onChangeReviewBulk, onOpenDetail, removingIds }) {
+  const { items, total, loading, filters, setFilters, loadMore, canLoadMore } = hook;
+  const status = filters.status || 'NEEDS_REVIEW';
+  const hideExpired = !!filters.hide_expired;
 
-  const expiredOK = (p) => {
-    if (status === 'EXCLUDED') return true;
-    if (!hideExpired) return true;
-    if (!p.end_date) return true;
-    return MOCK.dDay(p.end_date) >= 0;
-  };
+  const [queryDraft, setQueryDraft] = useState(filters.q || '');
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if ((filters.q || '') !== queryDraft) setFilters({ q: queryDraft || undefined });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [queryDraft]);
 
-  const rows = useMemo(() => {
-    return postings.filter(p =>
-      p.review_status !== 'UNREVIEWED' &&
-      (status === 'ALL' || p.review_status === status) &&
-      expiredOK(p) &&
-      (site === 'ALL' || p.source_site === site) &&
-      applyDomainFilter(p, domain) &&
-      applySearch(p, query)
-    ).sort(sortByRelevance);
-  }, [postings, status, hideExpired, site, domain, query]);
+  const pg = usePagination(items, 30);
+  useEffect(() => {
+    if (pg.page === pg.totalPages && canLoadMore && !loading) {
+      loadMore();
+    }
+  }, [pg.page, pg.totalPages, canLoadMore, loading]);
 
-  const pg = usePagination(rows, 30);
   const { selectedIds, toggleOne, toggleAll, clear } = useRowSelection(pg.pageItems);
   const handleBulk = (newStatus) => {
     onChangeReviewBulk(Array.from(selectedIds), newStatus);
     clear();
   };
 
-  const counts = useMemo(() => {
-    const out = { NEEDS_REVIEW: 0, IN_PROGRESS: 0, EXCLUDED: 0 };
-    for (const p of postings) if (p.review_status in out) out[p.review_status]++;
-    return out;
-  }, [postings]);
-
   const bulkOptions = [
     { value: 'UNREVIEWED',   label: '미검토로 되돌리기' },
     { value: 'NEEDS_REVIEW', label: '검토 필요로 이동' },
     { value: 'IN_PROGRESS',  label: '지원 진행으로 이동' },
     { value: 'EXCLUDED',     label: '제외로 이동' },
-  ].filter(o => status === 'ALL' ? true : o.value !== status);
+  ].filter(o => o.value !== status);
 
   return (
     <div>
       <SectionHead
-        title="상태별 통합 모니터링"
+        title="검토 상태별 확인"
         sub="검토 필요 · 지원 진행 · 제외 상태를 일괄 관리합니다"
       />
       <Toolbar>
         <Toolbar.Label>상태</Toolbar.Label>
         <ChipGroup
           value={status}
-          onChange={setStatus}
+          onChange={(v) => setFilters({ status: v })}
           options={[
-            { value: 'NEEDS_REVIEW', label: `검토 필요 (${counts.NEEDS_REVIEW})` },
-            { value: 'IN_PROGRESS',  label: `지원 진행 (${counts.IN_PROGRESS})` },
-            { value: 'EXCLUDED',     label: `제외 (${counts.EXCLUDED})` },
-            { value: 'ALL',          label: '전체' },
+            { value: 'NEEDS_REVIEW', label: '검토 필요' },
+            { value: 'IN_PROGRESS',  label: '지원 진행' },
+            { value: 'EXCLUDED',     label: '제외' },
           ]}
         />
         <Toolbar.Divider />
         <Toolbar.Label>출처</Toolbar.Label>
         <ChipGroup
-          value={site}
-          onChange={setSite}
+          value={filters.site || 'ALL'}
+          onChange={(v) => setFilters({ site: v === 'ALL' ? undefined : v })}
           options={[
             { value: 'ALL', label: '전체' },
             { value: 'BIZINFO', label: SITE_LABEL.BIZINFO },
@@ -351,16 +350,24 @@ function StatusTab({ postings, domains, onChangeReview, onChangeReviewBulk, onOp
         />
         <Toolbar.Divider />
         <Toolbar.Label>분야</Toolbar.Label>
-        <DomainFilterChips domains={domains} value={domain} onChange={setDomain} />
+        <DomainFilterChips
+          domains={domains}
+          value={filters.domain || 'ALL'}
+          onChange={(v) => setFilters({ domain: v === 'ALL' ? undefined : v })}
+        />
         <Toolbar.Divider />
-        <SearchPill value={query} onChange={setQuery} placeholder="사업명 / 요약 검색" />
+        <SearchPill value={queryDraft} onChange={setQueryDraft} placeholder="사업명 검색" />
         <Toolbar.Spacer />
         {status !== 'EXCLUDED' && (
-          <CheckboxRow checked={hideExpired} onChange={setHideExpired} style={{ fontSize: 12, color: 'var(--steel)' }}>
+          <CheckboxRow
+            checked={hideExpired}
+            onChange={(v) => setFilters({ hide_expired: v })}
+            style={{ fontSize: 12, color: 'var(--steel)' }}
+          >
             만료 자동 숨김 (§5.2)
           </CheckboxRow>
         )}
-        <Toolbar.Count n={rows.length} />
+        <Toolbar.Count n={total} />
       </Toolbar>
 
       {selectedIds.size > 0 && (
@@ -385,9 +392,13 @@ function StatusTab({ postings, domains, onChangeReview, onChangeReviewBulk, onOp
       <Pagination
         page={pg.page}
         totalPages={pg.totalPages}
-        total={pg.total}
+        total={total}
         showingFrom={pg.showingFrom}
         showingTo={pg.showingTo}
+        loadedCount={items.length}
+        canLoadMore={canLoadMore}
+        loading={loading}
+        onLoadMore={loadMore}
         onChange={pg.setPage}
       />
     </div>

@@ -6,6 +6,103 @@
  * App 안에 인라인되어 있던 로직과 동작은 1:1 동일. (순수 추출, 행동 변화 없음)
  * ============================================================ */
 
+/* -- 0. 서버 페이지네이션 · 필터·정렬 백엔드 위임 ---------------
+ * 매 탭(UnreviewedTab, StatusTab) 가 자체 인스턴스 보유.
+ * filters 변경 시 page=1 reload, loadMore 시 다음 200건 누적.
+ * 정렬은 항상 백엔드(`relevance_score DESC NULLS LAST`)가 처리하므로
+ * 상위 200건이 가장 적합한 행임이 보장된다.
+ * Mock 모드(non-LIVE) 에선 외부에서 들어온 mockItems 를 사용. */
+const PAGE_FETCH_SIZE = 200;
+
+function usePaginatedPostings({ liveMode, initialFilters, mockItems = [] }) {
+  const [filters, setFiltersState] = useState(initialFilters || {});
+  const [items, setItems] = useState(liveMode ? [] : mockItems);
+  const [total, setTotal] = useState(liveMode ? 0 : mockItems.length);
+  const [pagesLoaded, setPagesLoaded] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // 필터 직렬화 키 (deps 트리거용)
+  const filtersKey = JSON.stringify(filters);
+
+  // 페이지 1 reload (필터 변경 시)
+  useEffect(() => {
+    if (!liveMode) {
+      setItems(mockItems);
+      setTotal(mockItems.length);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    window.API.fetchPostings({ ...filters, page: 1, page_size: PAGE_FETCH_SIZE })
+      .then(res => {
+        if (cancelled) return;
+        setItems(res.items);
+        setTotal(res.total);
+        setPagesLoaded(1);
+      })
+      .catch(e => !cancelled && setError(e))
+      .finally(() => !cancelled && setLoading(false));
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveMode, filtersKey]);
+
+  const setFilters = (patch) => setFiltersState(prev => ({ ...prev, ...patch }));
+
+  const loadMore = () => {
+    if (!liveMode || loading || items.length >= total) return;
+    setLoading(true);
+    const nextPage = pagesLoaded + 1;
+    window.API.fetchPostings({ ...filters, page: nextPage, page_size: PAGE_FETCH_SIZE })
+      .then(res => {
+        setItems(prev => [...prev, ...res.items]);
+        setTotal(res.total);
+        setPagesLoaded(nextPage);
+      })
+      .catch(e => setError(e))
+      .finally(() => setLoading(false));
+  };
+
+  // PATCH 후 외부에서 호출 — 한 row만 인라인 업데이트.
+  // 필터에 안 맞는 새 상태가 되면 list 에서 제거 (status 필터의 경우).
+  const upsertItem = (id, partial) => {
+    setItems(prev => prev.map(p => p.id === id ? { ...p, ...partial } : p));
+  };
+  const removeItem = (id) => {
+    setItems(prev => prev.filter(p => p.id !== id));
+    setTotal(t => Math.max(0, t - 1));
+  };
+  const refetch = () => {
+    if (!liveMode) return;
+    setLoading(true);
+    window.API.fetchPostings({ ...filters, page: 1, page_size: PAGE_FETCH_SIZE })
+      .then(res => {
+        setItems(res.items);
+        setTotal(res.total);
+        setPagesLoaded(1);
+      })
+      .catch(e => setError(e))
+      .finally(() => setLoading(false));
+  };
+
+  return {
+    items,
+    total,
+    loading,
+    error,
+    filters,
+    setFilters,
+    loadMore,
+    canLoadMore: items.length < total,
+    pagesLoaded,
+    pageSize: PAGE_FETCH_SIZE,
+    upsertItem,
+    removeItem,
+    refetch,
+  };
+}
+
 /* -- 1. LIVE 모드 초기 부트스트랩 ----------------------------- */
 function useLiveBootstrap({
   liveMode,
@@ -43,16 +140,47 @@ function useLiveBootstrap({
 function usePostingReview({
   postings, setPostings, setLogs, setRemovingIds,
   tab, liveMode, toast,
+  paginatedHooks = [],
 }) {
+  // 두 탭의 hook items 합쳐서 찾기 (LIVE) — id 로 lookup.
+  const findRow = (id) => {
+    for (const h of paginatedHooks) {
+      const found = h.items && h.items.find(x => x.id === id);
+      if (found) return found;
+    }
+    return postings.find(x => x.id === id);
+  };
+
+  // 행 한 건이 새 status 로 바뀔 때, 각 hook 에서 보일지 안 보일지 판단해 해당 hook
+  // items 에서 제거/유지/삽입을 결정. 가장 단순한 정책: 새 status 가 hook 의 status
+  // 필터와 매치하면 inline update, 아니면 hook 에서 제거.
+  const applyToHooks = (id, newStatus, original) => {
+    for (const h of paginatedHooks) {
+      const wantedStatus = h.filters && h.filters.status;
+      // 'ALL' 또는 미지정 → 모든 status 허용
+      const matches = !wantedStatus || wantedStatus === newStatus;
+      if (matches) {
+        h.upsertItem && h.upsertItem(id, {
+          review_status: newStatus,
+          last_updated_at: new Date().toISOString(),
+        });
+      } else {
+        h.removeItem && h.removeItem(id);
+      }
+    }
+  };
+
   const handleChangeReview = (id, newStatus) => {
-    const p = postings.find(x => x.id === id);
+    const p = findRow(id);
     if (!p || p.review_status === newStatus) return;
-    const willLeave = (tab === 'unreviewed' && newStatus !== 'UNREVIEWED');
+    const willLeave = (tab === 'unreviewed' && newStatus !== 'UNREVIEWED')
+                      || (tab === 'status' && p.review_status !== newStatus);
 
     const apply = () => {
       setPostings(ps => ps.map(x => x.id === id
         ? { ...x, review_status: newStatus, last_updated_at: new Date().toISOString() }
         : x));
+      applyToHooks(id, newStatus, p);
     };
     if (willLeave) {
       setRemovingIds(rids => [...rids, id]);
@@ -70,6 +198,7 @@ function usePostingReview({
         setPostings(ps => ps.map(x =>
           x.id === id ? { ...x, review_status: p.review_status } : x,
         ));
+        applyToHooks(id, p.review_status, p);
       });
     }
 
@@ -84,15 +213,14 @@ function usePostingReview({
 
   const handleChangeReviewBulk = (ids, newStatus) => {
     if (!ids || !ids.length) return;
-    const targets = postings.filter(p => ids.includes(p.id) && p.review_status !== newStatus);
+    const allCandidates = ids.map(findRow).filter(Boolean);
+    const targets = allCandidates.filter(p => p.review_status !== newStatus);
     if (!targets.length) {
       toast('변경할 항목이 없습니다 (이미 같은 상태)', 'warn');
       return;
     }
 
-    const fadeIds = (tab === 'unreviewed' && newStatus !== 'UNREVIEWED')
-      ? targets.map(t => t.id)
-      : (tab === 'status' ? targets.map(t => t.id) : []);
+    const fadeIds = targets.map(t => t.id);
 
     const apply = () => {
       const now = new Date().toISOString();
@@ -101,6 +229,7 @@ function usePostingReview({
           ? { ...p, review_status: newStatus, last_updated_at: now }
           : p
       ));
+      for (const t of targets) applyToHooks(t.id, newStatus, t);
     };
 
     if (fadeIds.length > 0) {

@@ -36,8 +36,24 @@ function App() {
   useRunningTimer(runningSites, setRunningCounters);
   useHealthPolling({ liveMode, hasRunning, setRuns });
 
+  // ----- 서버 페이지네이션 hook · 탭별 1 인스턴스 -----
+  // 정렬은 백엔드(`relevance_score DESC NULLS LAST`)가 처리하므로 상위 200건이
+  // 가장 적합한 행임이 보장된다. 페이지가 누적된 끝에 도달하면 loadMore() 로
+  // 다음 200건 추가 fetch — 묻히는 행 없음.
+  const unreviewedHook = usePaginatedPostings({
+    liveMode,
+    initialFilters: { status: 'UNREVIEWED' },
+    mockItems: postings.filter(p => p.review_status === 'UNREVIEWED'),
+  });
+  const statusHook = usePaginatedPostings({
+    liveMode,
+    initialFilters: { status: 'NEEDS_REVIEW', hide_expired: true },
+    mockItems: postings.filter(p => p.review_status !== 'UNREVIEWED'),
+  });
+
   const review = usePostingReview({
     postings, setPostings, setLogs, setRemovingIds, tab, liveMode, toast,
+    paginatedHooks: [unreviewedHook, statusHook],
   });
   const runner = useRunTrigger({
     liveMode, setRuns, setLogs,
@@ -52,11 +68,17 @@ function App() {
   });
 
   // ----- Tab counts -----
+  // LIVE: hook 의 백엔드 total 사용 (전체 정확한 카운트).
+  // Mock: 메모리 postings filter 카운트.
   const counts = useMemo(() => ({
-    unreviewed: postings.filter(p => p.review_status === 'UNREVIEWED').length,
-    status:     postings.filter(p => p.review_status !== 'UNREVIEWED').length,
-    logs:       logs.length,
-  }), [postings, logs]);
+    unreviewed: liveMode
+      ? unreviewedHook.total
+      : postings.filter(p => p.review_status === 'UNREVIEWED').length,
+    status: liveMode
+      ? statusHook.total
+      : postings.filter(p => p.review_status !== 'UNREVIEWED').length,
+    logs: logs.length,
+  }), [liveMode, unreviewedHook.total, statusHook.total, postings, logs]);
 
   // ----- Detail modal (LIVE: content_html 보강 fetch) -----
   const handleOpenDetail = (p) => {
@@ -117,7 +139,7 @@ function App() {
         <div className="tab-body">
           {tab === 'unreviewed' && (
             <UnreviewedTab
-              postings={postings}
+              hook={unreviewedHook}
               domains={domains}
               onChangeReview={review.handleChangeReview}
               onChangeReviewBulk={review.handleChangeReviewBulk}
@@ -127,7 +149,7 @@ function App() {
           )}
           {tab === 'status' && (
             <StatusTab
-              postings={postings}
+              hook={statusHook}
               domains={domains}
               onChangeReview={review.handleChangeReview}
               onChangeReviewBulk={review.handleChangeReviewBulk}
