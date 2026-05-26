@@ -33,14 +33,16 @@ function PostingsTable({
     <DataTable>
       <colgroup>
         <col style={{ width: '3%' }} />
+        <col style={{ width: '8%' }} />
+        <col style={{ width: '7%' }} />
+        <col style={{ width: '5%' }} />
+        <col style={{ width: '10%' }} />
         <col style={{ width: '6%' }} />
-        <col style={{ width: '11%' }} />
-        <col style={{ width: '7%' }} />
-        <col style={{ width: '7%' }} />
-        <col style={{ width: '22%' }} />
-        <col style={{ width: '19%' }} />
+        <col style={{ width: '6%' }} />
+        <col style={{ width: '18%' }} />
+        <col style={{ width: '15%' }} />
+        <col style={{ width: '10%' }} />
         <col style={{ width: '12%' }} />
-        <col style={{ width: '13%' }} />
       </colgroup>
       <thead>
         <tr>
@@ -54,6 +56,8 @@ function PostingsTable({
               title={allChecked ? '전체 해제' : '현재 표시 중인 행 전체 선택'}
             />
           </th>
+          <th className="id-cell" title="DB에 적재된 KST 날짜">수집일</th>
+          <th title="회사 지침 기준 AI 평가 (0~100)">추천</th>
           <th>적합도</th>
           <th>분야</th>
           <th>출처</th>
@@ -85,6 +89,8 @@ function PostingsTable({
                   onChange={() => onToggleSelect(p.id)}
                 />
               </td>
+              <td className="id-cell">{MOCK.fmtDateKST(p.first_seen_at)}</td>
+              <td><RelevanceScore value={p.relevance_score} reason={p.relevance_reason} /></td>
               <td><SuitabilityBadge value={p.ai_suitability} /></td>
               <td><DomainBadges names={p.assigned_fields} domains={domains} /></td>
               <td><SiteBadge site={p.source_site} /></td>

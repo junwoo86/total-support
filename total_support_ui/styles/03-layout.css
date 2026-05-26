@@ -283,6 +283,86 @@
   vertical-align: middle;
 }
 
+/* Relevance score cell — AI 회사 적합도 평가 (0~100, NULL=—) */
+.data-table .relevance-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+}
+.data-table .relevance-score { font-weight: 600; font-variant-numeric: tabular-nums; }
+.data-table .relevance-na { color: var(--steel); }
+.data-table .relevance-high .relevance-score { color: var(--coral, #ff5a4e); }
+.data-table .relevance-mid  .relevance-score { color: var(--ink, #0f172a); }
+.data-table .relevance-low  .relevance-score { color: var(--steel, #64748b); }
+.data-table .relevance-badge {
+  font-size: 0.66em;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background-color: var(--coral, #ff5a4e);
+  color: white;
+  letter-spacing: 0.5px;
+}
+.data-table .relevance-hint {
+  border: 1px solid var(--border, #cbd5e1);
+  background: var(--surface, #f8fafc);
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  font-size: 10px;
+  line-height: 14px;
+  text-align: center;
+  cursor: pointer;
+  padding: 0;
+  color: var(--steel);
+}
+.data-table .relevance-hint:hover {
+  background: var(--ink, #0f172a);
+  color: white;
+  border-color: var(--ink, #0f172a);
+}
+.data-table .relevance-popover {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  z-index: 50;
+  width: 320px;
+  background: white;
+  border: 1px solid var(--border, #cbd5e1);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+  padding: 10px 12px;
+  font-weight: normal;
+}
+.data-table .relevance-popover-head {
+  font-size: 11px;
+  color: var(--steel);
+  margin-bottom: 6px;
+  letter-spacing: 0.3px;
+}
+.data-table .relevance-popover-body {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Sequence # column — DB primary key as display order */
+.data-table .id-cell {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82em;
+  color: var(--steel);
+  text-align: right;
+  padding-right: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.data-table th.id-cell {
+  text-align: right;
+  padding-right: 10px;
+}
+
 /* ============================================================
  * Empty state
  * ============================================================ */

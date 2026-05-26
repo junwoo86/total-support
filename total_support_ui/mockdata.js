@@ -22,6 +22,16 @@ function fmtDateShort(s) {
   if (!s) return '';
   return s.slice(5).replace('-', '-');
 }
+// ISO 문자열 (UTC `Z` 또는 +09:00) → KST 기준 yyyy-mm-dd
+function fmtDateKST(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  // KST = UTC+9
+  const kst = new Date(d.getTime() + 9 * 3600 * 1000);
+  const pad = n => String(n).padStart(2, '0');
+  return `${kst.getUTCFullYear()}-${pad(kst.getUTCMonth() + 1)}-${pad(kst.getUTCDate())}`;
+}
 function fmtDateTime(iso) {
   const d = new Date(iso);
   const pad = n => String(n).padStart(2, '0');
@@ -459,6 +469,6 @@ const SEED_SYSTEM_LOGS = [
 
 window.MOCK = {
   TODAY,
-  todayKST, dateOnly, dDay, fmtDateShort, fmtDateTime, relTime,
+  todayKST, dateOnly, dDay, fmtDateShort, fmtDateKST, fmtDateTime, relTime,
   SEED_DOMAINS, SEED_KEYWORDS, SEED_POSTINGS, SEED_COLLECTION_RUNS, SEED_SYSTEM_LOGS,
 };
