@@ -402,7 +402,7 @@ class BaseScraper(ABC):
         screen_result = screen(screen_text, kw_specs)
 
         # 4-1) 회사 적합도 평가 (Gemini · 지침이 있을 때만)
-        rel_score, rel_reason, rel_version = _try_evaluate_relevance(
+        rel_score, rel_reason, rel_version, rel_failed = _try_evaluate_relevance(
             title=item.title, body_plain=plain_body,
         )
 
@@ -436,16 +436,19 @@ class BaseScraper(ABC):
             relevance_score=rel_score,
             relevance_reason=rel_reason,
             evaluated_with_guideline_version=rel_version,
+            evaluation_failed=rel_failed,
             first_seen_at=func.now(),
             last_updated_at=func.now(),
         )
-        # 평가 점수는 새로 산출된 경우에만 덮어쓰기 (None 으로 기존 값 지우지 않음).
+        # 평가 점수는 새로 산출되었거나 실패 플래그가 잡힌 경우에만 덮어쓰기
+        # (None+failed=false 로 기존 값 지우지 않음).
         rel_overrides: dict = {}
-        if rel_score is not None:
+        if rel_score is not None or rel_failed:
             rel_overrides = {
                 "relevance_score": stmt.excluded.relevance_score,
                 "relevance_reason": stmt.excluded.relevance_reason,
                 "evaluated_with_guideline_version": stmt.excluded.evaluated_with_guideline_version,
+                "evaluation_failed": stmt.excluded.evaluation_failed,
             }
         stmt = stmt.on_conflict_do_update(
             index_elements=["source_site", "source_id"],
@@ -516,32 +519,39 @@ def _strip_tags_for_match(html: str) -> str:
 
 def _try_evaluate_relevance(
     *, title: str, body_plain: str,
-) -> tuple[int | None, str | None, int | None]:
+) -> tuple[int | None, str | None, int | None, bool]:
     """수집 시점 회사 적합도 평가 — Gemini + 회사 지침.
 
     Returns:
-        (score 0~100, reason 텍스트, 평가에 사용된 guideline.version).
-        지침 없음/SDK 미설정/평가 실패 → (None, None, None) — 적재는 계속.
+        (score 0~100, reason, guideline.version, failed_flag)
+        - 지침 없음 / evaluator 비활성 / 본문 짧음 → (None, None, None, False)
+          = "평가 안 함" — UI 에서 "—" 로 표시.
+        - Gemini 3회 재시도 실패                → (None, None, version, True)
+          = "분석 실패" — UI 에서 최상단 노출.
+        - 정상 평가                              → (score, reason, version, False).
+
+    스크래퍼 파이프라인이 LLM 장애로 중단되지 않도록 모든 예외 swallow.
     """
     if not body_plain or len(body_plain) < 30:
-        return None, None, None
+        return None, None, None, False
     try:
         from total_support.services.evaluator import get_evaluator
         from total_support.services.guidelines import get_current_guideline_for_eval
 
         guideline = get_current_guideline_for_eval()
         if not guideline:
-            return None, None, None  # 회사 지침 미설정 → 평가 안 함
+            return None, None, None, False  # 회사 지침 미설정 → 평가 안 함
         evaluator = get_evaluator()
         if evaluator is None:
-            return None, None, None  # ADC 미설정 → 평가 안 함
+            return None, None, None, False  # ADC 미설정 → 평가 안 함
         result = evaluator.evaluate(
             guideline_md=guideline.content_md,
             posting_title=title,
             posting_body=body_plain,
         )
         if result is None:
-            return None, None, None
-        return result.score, result.reason, guideline.version
+            # 평가 시도했으나 3회 재시도 모두 실패 — failed=True 로 기록
+            return None, None, guideline.version, True
+        return result.score, result.reason, guideline.version, False
     except Exception:  # noqa: BLE001
-        return None, None, None
+        return None, None, None, False

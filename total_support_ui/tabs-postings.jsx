@@ -90,7 +90,7 @@ function PostingsTable({
                 />
               </td>
               <td className="id-cell">{MOCK.fmtDateKST(p.first_seen_at)}</td>
-              <td><RelevanceScore value={p.relevance_score} reason={p.relevance_reason} /></td>
+              <td><RelevanceScore value={p.relevance_score} reason={p.relevance_reason} failed={p.evaluation_failed} /></td>
               <td><SuitabilityBadge value={p.ai_suitability} /></td>
               <td><DomainBadges names={p.assigned_fields} domains={domains} /></td>
               <td><SiteBadge site={p.source_site} /></td>
@@ -161,6 +161,29 @@ function applySearch(p, query) {
   return p.title.toLowerCase().includes(q) || p.summary.toLowerCase().includes(q);
 }
 
+/* 공통 정렬 — 백엔드 services/postings.py 의 ORDER BY 와 동일 규칙.
+ *  1) evaluation_failed=true 가 최상단
+ *  2) AI 회사 적합도 점수 DESC (NULL 후순위)
+ *  3) 키워드 적합도 HIGH 우선
+ *  4) D-Day 가까운 순
+ *  5) 최근 적재 순
+ */
+function sortByRelevance(a, b) {
+  const af = !!a.evaluation_failed, bf = !!b.evaluation_failed;
+  if (af !== bf) return af ? -1 : 1;
+  const as = a.relevance_score, bs = b.relevance_score;
+  if (as !== bs) {
+    if (as == null) return 1;
+    if (bs == null) return -1;
+    return bs - as;
+  }
+  if (a.ai_suitability !== b.ai_suitability) return a.ai_suitability === 'HIGH' ? -1 : 1;
+  const ad = a.end_date ? MOCK.dDay(a.end_date) : 999;
+  const bd = b.end_date ? MOCK.dDay(b.end_date) : 999;
+  if (ad !== bd) return ad - bd;
+  return new Date(b.first_seen_at) - new Date(a.first_seen_at);
+}
+
 /* ============================================================
  * Tab 1 · Unreviewed
  * ============================================================ */
@@ -177,13 +200,7 @@ function UnreviewedTab({ postings, domains, onChangeReview, onChangeReviewBulk, 
       (site === 'ALL' || p.source_site === site) &&
       applyDomainFilter(p, domain) &&
       applySearch(p, query)
-    ).sort((a, b) => {
-      if (a.ai_suitability !== b.ai_suitability) return a.ai_suitability === 'HIGH' ? -1 : 1;
-      const ad = a.end_date ? MOCK.dDay(a.end_date) : 999;
-      const bd = b.end_date ? MOCK.dDay(b.end_date) : 999;
-      if (ad !== bd) return ad - bd;
-      return new Date(b.first_seen_at) - new Date(a.first_seen_at);
-    });
+    ).sort(sortByRelevance);
   }, [postings, suitability, site, domain, query]);
 
   // 30개씩 페이징 (대시보드 무한 노출 방지)
@@ -292,11 +309,7 @@ function StatusTab({ postings, domains, onChangeReview, onChangeReviewBulk, onOp
       (site === 'ALL' || p.source_site === site) &&
       applyDomainFilter(p, domain) &&
       applySearch(p, query)
-    ).sort((a, b) => {
-      const ad = a.end_date ? MOCK.dDay(a.end_date) : 999;
-      const bd = b.end_date ? MOCK.dDay(b.end_date) : 999;
-      return ad - bd;
-    });
+    ).sort(sortByRelevance);
   }, [postings, status, hideExpired, site, domain, query]);
 
   const pg = usePagination(rows, 30);

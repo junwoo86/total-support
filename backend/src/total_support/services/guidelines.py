@@ -134,6 +134,7 @@ def _run_reevaluation(new_version: int) -> None:
     from total_support.scrapers.base import _strip_tags_for_match
 
     updated = 0
+    failed = 0
     for pid, title, html in rows:
         body = _strip_tags_for_match(html or "")
         result = evaluator.evaluate(
@@ -141,18 +142,34 @@ def _run_reevaluation(new_version: int) -> None:
             posting_title=title or "",
             posting_body=body,
         )
-        if result is None:
-            continue
         with SessionLocal() as db:
-            db.execute(
-                update(GrantPosting)
-                .where(GrantPosting.id == pid)
-                .values(
-                    relevance_score=result.score,
-                    relevance_reason=result.reason,
-                    evaluated_with_guideline_version=new_version,
+            if result is None:
+                # 3회 재시도 실패 — UI 최상단 노출용 플래그 적재
+                db.execute(
+                    update(GrantPosting)
+                    .where(GrantPosting.id == pid)
+                    .values(
+                        relevance_score=None,
+                        relevance_reason=None,
+                        evaluated_with_guideline_version=new_version,
+                        evaluation_failed=True,
+                    )
                 )
-            )
+                failed += 1
+            else:
+                db.execute(
+                    update(GrantPosting)
+                    .where(GrantPosting.id == pid)
+                    .values(
+                        relevance_score=result.score,
+                        relevance_reason=result.reason,
+                        evaluated_with_guideline_version=new_version,
+                        evaluation_failed=False,
+                    )
+                )
+                updated += 1
             db.commit()
-        updated += 1
-    logger.info("guideline backfill done — updated %d / %d", updated, len(rows))
+    logger.info(
+        "guideline backfill done — updated=%d failed=%d / total=%d",
+        updated, failed, len(rows),
+    )

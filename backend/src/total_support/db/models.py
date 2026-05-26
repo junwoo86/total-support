@@ -112,10 +112,14 @@ class GrantPosting(Base):
     )
 
     # 회사 적합도 평가 (마이그레이션 003 · Vertex AI Gemini · ADC)
-    # gcp_project_id 또는 회사 지침이 없으면 NULL. 평가 실패도 NULL.
+    # gcp_project_id 또는 회사 지침이 없으면 score=NULL + failed=false.
+    # Gemini 3회 재시도 실패 시 score=NULL + failed=true (UI 최상단 "분석 실패").
     relevance_score: Mapped[int | None] = mapped_column(SmallInteger)
     relevance_reason: Mapped[str | None] = mapped_column(Text)
     evaluated_with_guideline_version: Mapped[int | None] = mapped_column(Integer)
+    evaluation_failed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
 
 
 # ============================================================

@@ -292,6 +292,16 @@
 }
 .data-table .relevance-score { font-weight: 600; font-variant-numeric: tabular-nums; }
 .data-table .relevance-na { color: var(--steel); }
+.data-table .relevance-fail-badge {
+  font-size: 0.78em;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background-color: #fbe5e3;
+  color: #b91c1c;
+  border: 1px solid #f3b6b1;
+  letter-spacing: 0.3px;
+}
 .data-table .relevance-high .relevance-score { color: var(--coral, #ff5a4e); }
 .data-table .relevance-mid  .relevance-score { color: var(--ink, #0f172a); }
 .data-table .relevance-low  .relevance-score { color: var(--steel, #64748b); }

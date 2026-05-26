@@ -166,9 +166,12 @@ function PostingStatusBadge({ value }) {
   return <Badge tone="neutral">{POSTING_STATUS_LABEL.CLOSED}</Badge>;
 }
 
-/* RelevanceScore — 회사 적합도 평가 (0~100, NULL=미평가).
- * 80%↑ 는 추천 강조, ? 버튼 클릭 시 평가 사유 popover. */
-function RelevanceScore({ value, reason }) {
+/* RelevanceScore — 회사 적합도 평가.
+ *  failed=true       → "분석 실패" 배지 (최상단 노출, 사용자 조치 신호)
+ *  value=null        → "—" (평가 안 함: 지침 비었거나 evaluator 비활성)
+ *  value=0~100       → 점수 표시, 80↑ "추천" 배지, ? 클릭 시 사유 popover
+ */
+function RelevanceScore({ value, reason, failed }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -178,8 +181,16 @@ function RelevanceScore({ value, reason }) {
     return () => document.removeEventListener('mousedown', onDoc);
   }, [open]);
 
+  if (failed) {
+    return (
+      <span className="relevance-cell relevance-failed"
+            title="Gemini 평가 3회 재시도 모두 실패 — 점검 필요">
+        <span className="relevance-fail-badge">분석 실패</span>
+      </span>
+    );
+  }
   if (value == null) {
-    return <span className="relevance-cell relevance-na" title="회사 지침 미설정 또는 평가 실패">—</span>;
+    return <span className="relevance-cell relevance-na" title="회사 지침 미설정 — 평가 안 됨">—</span>;
   }
   const tone = value >= 80 ? 'relevance-high' : value >= 50 ? 'relevance-mid' : 'relevance-low';
   const hasReason = !!(reason && reason.trim());

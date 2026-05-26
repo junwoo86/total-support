@@ -48,6 +48,8 @@ class PostingListItem(ORMModel):
     relevance_score: int | None = None
     relevance_reason: str | None = None
     evaluated_with_guideline_version: int | None = None
+    #: Gemini 3회 재시도 모두 실패 — UI 에서 "분석 실패" 배지 + 최상단 노출
+    evaluation_failed: bool = False
     #: 헬퍼 — UI가 표시할 D-Day (음수=경과). NULL이면 raw_period 노출.
     d_day: int | None = None
 
