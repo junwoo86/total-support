@@ -111,6 +111,10 @@ class GeminiEvaluator:
             temperature=0.0,
             max_output_tokens=600,  # 사유가 길어도 잘리지 않도록 여유
             response_mime_type="application/json",
+            # gemini-3.5-flash 는 thinking 모델 — 추론 토큰이 응답 토큰을
+            # 잠식해서 text=None 으로 잘리는 현상이 있다. Biocom-lab 패턴
+            # 그대로 thinking_budget=0 으로 추론 비활성, 응답 출력만 사용.
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
         )
 
         last_err: Exception | None = None
