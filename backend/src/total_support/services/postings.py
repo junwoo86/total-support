@@ -14,7 +14,52 @@ from total_support.api.schemas import (
 )
 from total_support.db import GrantPosting, dday_expr, seoul_today_expr
 from total_support.observability.logger import LogCategory, LogLevel, log_event
+from total_support.scrapers.bizinfo import BizinfoScraper
+from total_support.scrapers.iris import IrisScraper
+from total_support.scrapers.sba import SbaScraper
 from total_support.services.exceptions import NotFoundError
+
+# 사이트별 본문 selector — scrapers 의 클래스 attribute 단일 출처 재사용.
+# 첫 풀 수집(commit 959afc1) 당시엔 selector 가 fetch_detail 에 적용되기 전이라
+# 모든 row 의 content_html 이 페이지 전체 sanitize 결과로 저장됨. 상세 응답 시
+# 한 번 더 selector 추출을 시도해서 모달에 본문만 노출.
+_SITE_BODY_SELECTORS: dict[str, tuple[str, ...]] = {
+    BizinfoScraper.SITE_CODE: BizinfoScraper.BODY_SELECTORS,
+    IrisScraper.SITE_CODE: IrisScraper.BODY_SELECTORS,
+    SbaScraper.SITE_CODE: SbaScraper.BODY_SELECTORS,
+}
+_BODY_MIN_TEXT_LEN = 50  # BaseScraper.BODY_MIN_TEXT_LEN 과 동일
+
+
+def _trim_body_html(source_site: str | None, content_html: str | None) -> str | None:
+    """저장된 raw content_html 을 사이트별 selector 로 한 번 더 추출.
+
+    - 구 데이터(페이지 전체): selector 가 매치되어 본문만 잘림.
+    - 신 데이터(이미 본문 fragment): 같은 selector 가 fragment 안에서도 매치되거나
+      매치 실패 시 원본 fragment 그대로 반환되어 idempotent.
+    - selector 미정의 / 매치 실패 / parse 오류 → 원본 그대로 (안전 fallback).
+    """
+    if not content_html or not source_site:
+        return content_html
+    selectors = _SITE_BODY_SELECTORS.get(source_site, ())
+    if not selectors:
+        return content_html
+    try:
+        from selectolax.parser import HTMLParser
+        tree = HTMLParser(content_html)
+    except Exception:  # noqa: BLE001
+        return content_html
+    for sel in selectors:
+        node = tree.css_first(sel)
+        if node is None:
+            continue
+        txt = (node.text(deep=True, strip=True) or "")
+        if len(txt) < _BODY_MIN_TEXT_LEN:
+            continue
+        html = node.html or ""
+        if html:
+            return html
+    return content_html
 
 
 @dataclass(slots=True, frozen=True)
@@ -96,7 +141,8 @@ def get_detail(db: Session, posting_id: int) -> PostingDetail:
         raise NotFoundError("공고를 찾을 수 없습니다")
     p, d_day = row
     base = _to_list_item(p, d_day)
-    return PostingDetail(**base.model_dump(), content_html=p.content_html)
+    trimmed = _trim_body_html(p.source_site, p.content_html)
+    return PostingDetail(**base.model_dump(), content_html=trimmed)
 
 
 # ============================================================
