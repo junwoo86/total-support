@@ -292,21 +292,20 @@
 }
 .data-table .relevance-score { font-weight: 600; font-variant-numeric: tabular-nums; }
 .data-table .relevance-na { color: var(--steel); }
-/* AI 평가 사유 셀 — 인라인 multiline (3줄까지, 초과 시 ellipsis) */
+/* AI 평가 사유 셀 — 전체 본문 그대로 노출 (행 높이 가변).
+ * line-clamp 없음 → 사유가 길면 row 가 함께 길어진다. */
 .data-table .reason-cell {
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.55;
   color: var(--ink, #0f172a);
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  word-break: break-word;
   white-space: normal;
+  word-break: break-word;
 }
 .data-table .reason-cell.reason-na {
   color: var(--steel);
-  -webkit-line-clamp: 1;
+}
+.data-table td {
+  vertical-align: top;  /* reason 이 길어져도 다른 셀이 상단 정렬되도록 */
 }
 
 .data-table .relevance-fail-badge {

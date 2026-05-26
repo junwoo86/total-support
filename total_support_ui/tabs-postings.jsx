@@ -33,13 +33,13 @@ function PostingsTable({
     <DataTable>
       <colgroup>
         <col style={{ width: '3%' }} />
-        <col style={{ width: '24%' }} />
+        <col style={{ width: '23%' }} />
+        <col style={{ width: '10%' }} />
+        <col style={{ width: '7%' }} />
+        <col style={{ width: '28%' }} />
+        <col style={{ width: '7%' }} />
         <col style={{ width: '11%' }} />
-        <col style={{ width: '7%' }} />
-        <col style={{ width: '22%' }} />
-        <col style={{ width: '7%' }} />
-        <col style={{ width: '14%' }} />
-        <col style={{ width: '12%' }} />
+        <col style={{ width: '11%' }} />
       </colgroup>
       <thead>
         <tr>
