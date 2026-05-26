@@ -114,10 +114,15 @@ def preview(db: Session, body: KeywordPreviewRequest) -> KeywordPreviewResponse:
         .all()
     )
 
+    # 본문 노이즈(푸터·메뉴·사이드바) 가 키워드 매처에 섞이지 않도록
+    # _trim_body_html 로 site 별 본문 fragment 만 추출한 뒤 매칭.
+    from total_support.services.postings import _trim_body_html
+
     samples: list[KeywordPreviewMatch] = []
     matched_count = 0
     for p in rows:
-        text = (p.title or "") + "\n" + _strip_html(p.content_html or "")
+        trimmed = _trim_body_html(p.source_site, p.content_html or "")
+        text = (p.title or "") + "\n" + _strip_html(trimmed or "")
         result = screen(text, [spec])
         if result.hits:
             matched_count += 1

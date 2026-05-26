@@ -119,6 +119,7 @@ def _run_reevaluation(new_version: int) -> None:
             db.execute(
                 select(
                     GrantPosting.id,
+                    GrantPosting.source_site,
                     GrantPosting.title,
                     GrantPosting.content_html,
                 ).where(GrantPosting.review_status == "UNREVIEWED")
@@ -131,12 +132,16 @@ def _run_reevaluation(new_version: int) -> None:
 
     # 동시성 절제 — 한 번에 1건씩 처리. Gemini-flash 라 큰 부담은 없고
     # 운영 DB 쪽 트랜잭션 부담을 분산한다.
+    # _trim_body_html 로 raw content_html → 본문 fragment 만 추출해 노이즈
+    # (푸터, 메뉴, 사이드바) 가 평가에 섞이지 않도록 한다.
     from total_support.scrapers.base import _strip_tags_for_match
+    from total_support.services.postings import _trim_body_html
 
     updated = 0
     failed = 0
-    for pid, title, html in rows:
-        body = _strip_tags_for_match(html or "")
+    for pid, site, title, html in rows:
+        trimmed = _trim_body_html(site, html or "")
+        body = _strip_tags_for_match(trimmed or "")
         result = evaluator.evaluate(
             guideline_md=snapshot.content_md,
             posting_title=title or "",
