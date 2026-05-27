@@ -133,6 +133,81 @@ function usePostingCounts({ liveMode, filters = {}, refreshKey = 0, mockPostings
   return counts;
 }
 
+/* -- 0c. 적합도 미평가 건 재평가 (수동 버튼 + 프로그레스바) ----
+ * 대상: UNREVIEWED + 미만료 + (relevance_score NULL OR evaluation_failed).
+ * - count: 버튼 옆 "미평가 N건" (마운트 시 fetch).
+ * - 트리거 후 백엔드 진행 상태(status)를 2초 간격 폴링 → progress 갱신.
+ *   진행률 = processed/total. running=false + finished 면 완료 → 목록 refetch.
+ *   (count 감소 폴링은 실패 건이 또 NULL 이라 부정확 — 백엔드 processed 사용.) */
+function useEvaluateMissing({ liveMode, toast, onComplete }) {
+  const [count, setCount] = useState(0);
+  const [progress, setProgress] = useState(null);  // {total, processed, updated, failed} | null
+  const [running, setRunning] = useState(false);
+  const pollRef = useRef(null);
+
+  const refreshCount = () => {
+    if (!liveMode) return;
+    window.API.getEvaluateMissingCount()
+      .then(r => setCount(r.count))
+      .catch(() => {});
+  };
+
+  useEffect(() => { refreshCount(); /* eslint-disable-next-line */ }, [liveMode]);
+  useEffect(() => () => clearInterval(pollRef.current), []);
+
+  const startPolling = () => {
+    clearInterval(pollRef.current);
+    let ticks = 0;
+    pollRef.current = setInterval(() => {
+      ticks += 1;
+      window.API.getEvaluateMissingStatus()
+        .then(st => {
+          setProgress({
+            total: st.total, processed: st.processed,
+            updated: st.updated, failed: st.failed,
+          });
+          if (!st.running) {
+            clearInterval(pollRef.current);
+            setRunning(false);
+            refreshCount();
+            if (st.total > 0) {
+              toast(
+                `재평가 완료 — ${st.updated}건 평가, ${st.failed}건 실패`,
+                st.failed > 0 ? 'warn' : 'success',
+              );
+            }
+            onComplete && onComplete();
+            // 잠시 후 진행바 숨김
+            setTimeout(() => setProgress(null), 4000);
+          } else if (ticks > 600) {  // 최대 20분(2s*600) 안전장치
+            clearInterval(pollRef.current);
+            setRunning(false);
+          }
+        })
+        .catch(() => {});
+    }, 2000);
+  };
+
+  const trigger = () => {
+    if (!liveMode) return;
+    window.API.triggerEvaluateMissing()
+      .then(res => {
+        if (!res.started) {
+          toast(res.reason || '재평가를 시작할 수 없습니다', 'warn');
+          refreshCount();
+          return;
+        }
+        setRunning(true);
+        setProgress({ total: res.target_count, processed: 0, updated: 0, failed: 0 });
+        toast(`${res.target_count}건 재평가 시작`, 'success');
+        startPolling();
+      })
+      .catch(e => toast(`재평가 트리거 실패: ${e.message}`, 'error'));
+  };
+
+  return { count, running, progress, trigger, refreshCount };
+}
+
 /* -- 1. LIVE 모드 초기 부트스트랩 ----------------------------- */
 function useLiveBootstrap({
   liveMode,

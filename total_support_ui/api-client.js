@@ -116,6 +116,18 @@
     async patchReviewStatus(id, status) {
       return jsend('PATCH', `/api/grant/postings/${id}/review-status`, { status });
     },
+    /** 적합도 비어있는 미검토 공고 수 (UNREVIEWED + 미만료 + score NULL/실패). */
+    async getEvaluateMissingCount() {
+      return jget('/api/grant/postings/evaluate-missing/count');
+    },
+    /** 위 대상 재평가 백그라운드 시작. {started, target_count, reason} 반환. */
+    async triggerEvaluateMissing() {
+      return jsend('POST', '/api/grant/postings/evaluate-missing');
+    },
+    /** 재평가 진행 상태 — {running, total, processed, updated, failed, ...}. */
+    async getEvaluateMissingStatus() {
+      return jget('/api/grant/postings/evaluate-missing/status');
+    },
     async getPostingDetail(id) {
       return jget(`/api/grant/postings/${id}/detail`);
     },

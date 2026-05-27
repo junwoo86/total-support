@@ -107,6 +107,59 @@
   color: var(--canvas);
   border-color: var(--accent, #2563eb);
 }
+/* reeval-btn: 적합도 미평가 재평가 버튼 */
+.chip.reeval-btn {
+  border-color: #7c3aed;
+  color: #7c3aed;
+  font-weight: 600;
+}
+.chip.reeval-btn:hover:not(:disabled) {
+  background: #7c3aed;
+  color: var(--canvas);
+}
+.chip.reeval-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: var(--hairline);
+  color: var(--steel);
+}
+.chip.reeval-btn.running {
+  border-color: #7c3aed;
+  color: #7c3aed;
+  opacity: 0.8;
+}
+.chip.reeval-btn.running span:first-child {
+  display: inline-block;
+  animation: reeval-spin 1s linear infinite;
+}
+@keyframes reeval-spin { to { transform: rotate(360deg); } }
+/* reeval-progress: 재평가 진행률 바 (버튼 대체 표시) */
+.reeval-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 8px;
+}
+.reeval-progress-bar {
+  width: 120px;
+  height: 8px;
+  border-radius: var(--r-full);
+  background: var(--stone);
+  overflow: hidden;
+}
+.reeval-progress-fill {
+  height: 100%;
+  background: #7c3aed;
+  border-radius: var(--r-full);
+  transition: width 0.4s ease;
+}
+.reeval-progress-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: #7c3aed;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 
 /* ============================================================
  * Toolbar (filter row)

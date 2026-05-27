@@ -185,7 +185,7 @@ function sortByRelevance(a, b) {
  *     ("적합도 상 + 마감 임박" 같은 워크플로우용 — page 별 동작)
  * 출처(site) 필터는 제거됨 (가치 낮고 칸 차지가 큼).
  * ============================================================ */
-function UnreviewedTab({ hook, domains, onChangeReview, onChangeReviewBulk, onOpenDetail, removingIds }) {
+function UnreviewedTab({ hook, domains, onChangeReview, onChangeReviewBulk, onOpenDetail, removingIds, reeval }) {
   const { items, total, loading, filters, setFilters, loadMore, canLoadMore } = hook;
 
   // 검색은 디바운스 300ms 로 백엔드 호출 빈도 절제
@@ -258,6 +258,14 @@ function UnreviewedTab({ hook, domains, onChangeReview, onChangeReviewBulk, onOp
         <Toolbar.Divider />
         <SearchPill value={queryDraft} onChange={setQueryDraft} placeholder="사업명 검색" />
         <Toolbar.Spacer />
+        {reeval && (
+          <ReevalButton
+            count={reeval.count}
+            running={reeval.running}
+            progress={reeval.progress}
+            onTrigger={reeval.trigger}
+          />
+        )}
         <SortToggle
           active={sortByDDay}
           onToggle={() => setSortByDDay(v => !v)}
@@ -303,6 +311,47 @@ function UnreviewedTab({ hook, domains, onChangeReview, onChangeReviewBulk, onOp
         onLoadMore={loadMore}
       />
     </div>
+  );
+}
+
+/* 적합도 미평가 건 재평가 버튼 (+ 진행률 바).
+ * "적합도가 비어있는" = UNREVIEWED + 미만료 + (점수 NULL or 분석실패).
+ * 여러 사용자가 동시에 눌러도 백엔드 thread+advisory lock 으로 1개만 실행.
+ * 진행 중이면 processed/total 프로그레스바 + "N/M (실패 K)" 표시. */
+function ReevalButton({ count, running, progress, onTrigger }) {
+  const disabled = running || count === 0;
+  const pct = progress && progress.total > 0
+    ? Math.round((progress.processed / progress.total) * 100)
+    : 0;
+
+  if (running && progress) {
+    return (
+      <div className="reeval-progress" title="적합도 재평가 진행 중">
+        <div className="reeval-progress-bar">
+          <div className="reeval-progress-fill" style={{ width: `${pct}%` }} />
+        </div>
+        <span className="reeval-progress-text">
+          재평가 {progress.processed}/{progress.total}
+          {progress.failed > 0 ? ` (실패 ${progress.failed})` : ''}
+        </span>
+      </div>
+    );
+  }
+
+  const label = count === 0 ? '미평가 없음' : `미평가 ${count}건 재평가`;
+  return (
+    <button
+      className="chip reeval-btn"
+      onClick={onTrigger}
+      disabled={disabled}
+      title={count === 0
+        ? '적합도가 비어있는 미검토 공고가 없습니다'
+        : `적합도가 비어있는 미검토 공고 ${count}건을 AI로 재평가합니다`}
+      style={{ marginRight: 8 }}
+    >
+      <span style={{ marginRight: 4 }}>✨</span>
+      {label}
+    </button>
   );
 }
 

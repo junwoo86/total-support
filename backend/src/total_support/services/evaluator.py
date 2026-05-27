@@ -92,20 +92,34 @@ class GeminiEvaluator:
         guideline_md: str,
         posting_title: str,
         posting_body: str,
+        allow_short: bool = False,
     ) -> EvalResult | None:
-        """평가. 지침이 비었거나 본문이 짧거나 3회 실패 → None."""
+        """평가. 지침이 비었거나 3회 실패 → None.
+
+        allow_short=False (기본, 수집 시점): 본문 30자 미만이면 평가 스킵(None).
+        allow_short=True (수동 재평가): 본문이 짧거나 비어도 제목 + 있는 정보로
+        추측 평가 진행 — 사용자가 "비어있는 건도 채워달라" 요청한 경로용.
+        """
         guideline_md = (guideline_md or "").strip()
         if not guideline_md:
             return None
         body = (posting_body or "").strip()
-        if len(body) < 30:
+        if not allow_short and len(body) < 30:
             return None
         if len(body) > self._max_input_chars:
             body = body[: self._max_input_chars]
 
         from google.genai import types
         system_text = _BASE_INSTRUCTION.format(guideline=guideline_md)
-        user_text = f"제목: {posting_title}\n\n본문:\n{body}"
+        # 본문이 부실하면 제목 위주로 추측하라고 명시 (allow_short 경로).
+        if allow_short and len(body) < 30:
+            user_text = (
+                f"제목: {posting_title}\n\n"
+                f"본문: (본문이 짧거나 비어 있습니다. 아래 단편 정보와 "
+                f"제목을 근거로 최대한 추측해 평가하세요.)\n{body}"
+            )
+        else:
+            user_text = f"제목: {posting_title}\n\n본문:\n{body}"
         config = types.GenerateContentConfig(
             system_instruction=system_text,
             temperature=0.0,

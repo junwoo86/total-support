@@ -103,6 +103,42 @@ def get_status_counts(
     )
 
 
+@router.get("/evaluate-missing/count")
+def evaluate_missing_count(
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    """재평가 대상 건수 — UNREVIEWED + 미만료 + 적합도 비어있음."""
+    from total_support.services import guidelines as gsvc
+
+    return {"count": gsvc.count_missing_eval(db)}
+
+
+@router.post("/evaluate-missing")
+def evaluate_missing_trigger() -> dict:
+    """적합도 비어있는 미검토 공고 재평가를 백그라운드로 시작.
+
+    대상: review_status=UNREVIEWED AND 미만료 AND
+          (relevance_score IS NULL OR evaluation_failed=true).
+    본문이 짧거나 비어도 제목 기반 추측 평가 (allow_short).
+    Returns: {started, target_count, reason}.
+    """
+    from total_support.services import guidelines as gsvc
+
+    return gsvc.trigger_fill_missing_async()
+
+
+@router.get("/evaluate-missing/status")
+def evaluate_missing_status() -> dict:
+    """재평가 진행 상태 — 프론트 프로그레스바 폴링.
+
+    {running, total, processed, updated, failed, started_at, finished_at}.
+    processed/total 로 진행률 계산.
+    """
+    from total_support.services import guidelines as gsvc
+
+    return gsvc.get_fill_progress()
+
+
 @router.get("/{posting_id}/detail", response_model=PostingDetail)
 def get_posting_detail(
     posting_id: int,
