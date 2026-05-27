@@ -553,8 +553,8 @@ function CompanyGuidelineCard() {
       </div>
       <div style={{ padding: '0 16px 12px 16px' }}>
         <div style={{ fontSize: 12, color: 'var(--steel)', marginBottom: 8, lineHeight: 1.55 }}>
-          회사 소개 + 진행하고 싶은 지원사업의 방향성을 적으세요. 저장하면 새로 수집되는
-          공고와 <strong>아직 검토하지 않은</strong> 공고들의 적합도(0~100%)를 자동 재평가합니다.
+          <strong>회사 소개 + 진행하고 싶은 지원사업의 방향성을 적으세요.</strong><br />
+          저장하면 새로 수집되는 공고와 <strong>아직 검토하지 않은</strong> 공고들의 적합도(0~100%)를 자동 재평가합니다.<br />
           검토를 시작한 공고의 과거 점수는 보존됩니다. 저장할 때마다 새 버전으로 누적되며
           과거 버전은 아래 '히스토리' 에서 다시 볼 수 있습니다.
         </div>
