@@ -527,8 +527,10 @@ function PostingDetailModal({ posting, domains, open, onClose }) {
         <>
           <SiteBadge site={posting.source_site} />
           <PostingStatusBadge value={posting.posting_status} />
-          <SuitabilityBadge value={posting.ai_suitability} />
           <DomainBadges names={posting.assigned_fields} domains={domains} />
+          <span className="detail-relevance">
+            적합도 <RelevanceScore value={posting.relevance_score} failed={posting.evaluation_failed} />
+          </span>
         </>
       }
       maxWidth={860}
@@ -547,20 +549,12 @@ function PostingDetailModal({ posting, domains, open, onClose }) {
       }
     >
       <div className="detail-meta">
-        <div className="k">source_id</div>
-        <div className="v mono">{posting.source_id}</div>
         <div className="k">접수기간 (원문)</div>
         <div className="v">{posting.raw_period}</div>
         <div className="k">D-Day</div>
         <div className="v">{ddayInfo}</div>
         <div className="k">최초 수집</div>
         <div className="v">{MOCK.fmtDateTime(posting.first_seen_at)}</div>
-        <div className="k">최근 갱신</div>
-        <div className="v">{MOCK.fmtDateTime(posting.last_updated_at)}</div>
-        <div className="k">스크리닝 버전</div>
-        <div className="v mono">v{posting.screened_with_version}</div>
-        <div className="k">detail_url</div>
-        <div className="v mono" style={{ wordBreak: 'break-all' }}>{posting.detail_url}</div>
       </div>
       {/* G5 · PRD §6.3-③: iframe sandbox 이중 방어.
           백엔드에서 sanitize되지만, 정책상 격리 컨텍스트로 한 번 더 보호. */}
@@ -578,7 +572,7 @@ function PostingDetailModal({ posting, domains, open, onClose }) {
           img{max-width:100%;height:auto;}
         </style>${posting.content_html || '<p style="color:#64748b">본문이 비어있습니다.</p>'}`}
         className="detail-content"
-        style={{ width: '100%', minHeight: 280, border: '1px solid var(--hairline-soft)', borderRadius: 8 }}
+        style={{ width: '100%', minHeight: 460, border: '1px solid var(--hairline-soft)', borderRadius: 8 }}
       />
     </Modal>
   );

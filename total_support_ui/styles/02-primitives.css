@@ -160,9 +160,15 @@
 }
 .domain-badges {
   display: flex;
-  flex-direction: column;   /* 각 분야 태그를 한 줄에 하나씩 세로 나열 */
-  align-items: flex-start;  /* 각 태그는 글자폭만큼만 (헬스케어 기준 줄바꿈 안 됨) */
+  flex-wrap: wrap;
   gap: 4px;
+}
+/* 공고 목록 테이블 셀 안에서만 분야 태그를 세로 나열 (좁은 분야 컬럼 대응).
+ * 모달 sub 등 다른 곳에선 가로 wrap 유지. */
+.data-table .domain-badges {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: flex-start;
 }
 
 /* ============================================================
