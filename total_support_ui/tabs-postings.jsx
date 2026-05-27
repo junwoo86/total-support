@@ -233,6 +233,14 @@ function UnreviewedTab({ hook, domains, onChangeReview, onChangeReviewBulk, onOp
       <SectionHead
         title="신규 미검토"
         sub="아직 검토하지 않은 공고 — 검토를 마치면 목록에서 빠집니다"
+        actions={reeval && (
+          <ReevalButton
+            count={reeval.count}
+            running={reeval.running}
+            progress={reeval.progress}
+            onTrigger={reeval.trigger}
+          />
+        )}
       />
       <Toolbar>
         <Toolbar.Label>적합도</Toolbar.Label>
@@ -258,21 +266,12 @@ function UnreviewedTab({ hook, domains, onChangeReview, onChangeReviewBulk, onOp
         <Toolbar.Divider />
         <SearchPill value={queryDraft} onChange={setQueryDraft} placeholder="사업명 검색" />
         <Toolbar.Spacer />
-        {reeval && (
-          <ReevalButton
-            count={reeval.count}
-            running={reeval.running}
-            progress={reeval.progress}
-            onTrigger={reeval.trigger}
-          />
-        )}
         <SortToggle
           active={sortByDDay}
           onToggle={() => setSortByDDay(v => !v)}
           activeLabel="D-Day순 (현재 페이지)"
           inactiveLabel="기본 정렬 (적합도)"
         />
-        <Toolbar.Count n={total} />
       </Toolbar>
 
       {selectedIds.size > 0 && (
@@ -469,7 +468,6 @@ function StatusTab({
             만료 자동 숨김 (§5.2)
           </CheckboxRow>
         )}
-        <Toolbar.Count n={total} />
       </Toolbar>
 
       {selectedIds.size > 0 && (

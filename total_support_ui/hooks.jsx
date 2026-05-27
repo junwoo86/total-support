@@ -109,7 +109,7 @@ function usePaginatedPostings({ liveMode, initialFilters, mockItems = [] }) {
  * 카운터 외부에서 증가시킬 수 있게 노출). Mock 모드는 mockPostings 로컬 집계.
  */
 function usePostingCounts({ liveMode, filters = {}, refreshKey = 0, mockPostings = [] }) {
-  const empty = { UNREVIEWED: 0, NEEDS_REVIEW: 0, IN_PROGRESS: 0, EXCLUDED: 0 };
+  const empty = { UNREVIEWED: 0, NEEDS_REVIEW: 0, IN_PROGRESS: 0, EXCLUDED: 0, EXPIRED: 0 };
   const [counts, setCounts] = useState(empty);
   const filtersKey = JSON.stringify(filters);
 
