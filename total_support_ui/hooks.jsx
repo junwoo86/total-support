@@ -455,7 +455,16 @@ function useRunTrigger({
               const card = h.cards.find(c => c.source_site === site);
               if (card && card.status !== 'RUNNING') {
                 clearInterval(poll);
-                setRuns(rs => [...rs, card.latest_run].filter(Boolean));
+                // run id 로 dedupe + 교체 — 같은 run 의 RUNNING 버전이 runs 에
+                // 남아 있으면 OK 버전으로 덮어쓴다 (append 하면 중복돼 카드가
+                // RUNNING 으로 박제되는 버그). useHealthPolling 과 동일 정책.
+                if (card.latest_run) {
+                  setRuns(rs => {
+                    const map = new Map(rs.map(r => [r.id, r]));
+                    map.set(card.latest_run.id, card.latest_run);
+                    return Array.from(map.values());
+                  });
+                }
                 setRunningSites(s => s.filter(x => x !== site));
                 setRunningCounters(c => { const n = { ...c }; delete n[site]; return n; });
                 toast(
