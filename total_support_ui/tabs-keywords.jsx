@@ -551,7 +551,7 @@ function CompanyGuidelineCard() {
             : (loading ? '로딩…' : '미설정')}
         </span>
       </div>
-      <div style={{ padding: '0 16px 12px 16px' }}>
+      <div style={{ padding: '16px 16px 12px 16px' }}>
         <div style={{ fontSize: 12, color: 'var(--steel)', marginBottom: 8, lineHeight: 1.55 }}>
           <strong>회사 소개 + 진행하고 싶은 지원사업의 방향성을 적으세요.</strong><br />
           저장하면 새로 수집되는 공고와 <strong>아직 검토하지 않은</strong> 공고들의 적합도(0~100%)를 자동 재평가합니다.<br />
