@@ -57,12 +57,12 @@ function App() {
     initialFilters: { status: ['UNREVIEWED'], hide_expired: true },
     mockItems: postings.filter(p => p.review_status === 'UNREVIEWED'),
   });
-  // 상태별 탭: 검토 필요 / 지원 진행 / 제외 + 기간 만료(가상 — UNREVIEWED 중
-  // end_date < 한국 오늘) 모두 초기 노출. 사용자가 칩으로 좁힘.
+  // 상태별 탭 초기 필터: '추가 검토'(NEEDS_REVIEW) + '진행'(IN_PROGRESS) 만.
+  // 제외 / 기간 만료는 칩으로 직접 켜서 확인. (가장 자주 보는 능동 검토 큐.)
   const statusHook = usePaginatedPostings({
     liveMode,
     initialFilters: {
-      status: ['NEEDS_REVIEW', 'IN_PROGRESS', 'EXCLUDED', 'EXPIRED'],
+      status: ['NEEDS_REVIEW', 'IN_PROGRESS'],
     },
     mockItems: postings.filter(p => p.review_status !== 'UNREVIEWED'),
   });
@@ -86,6 +86,11 @@ function App() {
   const review = usePostingReview({
     postings, setPostings, setLogs, setRemovingIds, tab, liveMode, toast,
     paginatedHooks: [unreviewedHook, statusHook],
+  });
+  // 적합도 미평가 건 재평가 — 완료되면 미검토 목록 재조회.
+  const reeval = useEvaluateMissing({
+    liveMode, toast,
+    onComplete: () => unreviewedHook.refetch && unreviewedHook.refetch(),
   });
   const runner = useRunTrigger({
     liveMode, setRuns, setLogs,
@@ -179,6 +184,7 @@ function App() {
               onChangeReviewBulk={review.handleChangeReviewBulk}
               onOpenDetail={handleOpenDetail}
               removingIds={removingIds}
+              reeval={reeval}
             />
           )}
           {tab === 'status' && (

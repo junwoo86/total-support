@@ -279,9 +279,9 @@ function UnreviewedTab({ hook, domains, onChangeReview, onChangeReviewBulk, onOp
         <BulkBar
           count={selectedIds.size}
           options={[
-            { value: 'NEEDS_REVIEW', label: '검토 필요로 이동' },
-            { value: 'IN_PROGRESS',  label: '지원 진행으로 이동' },
-            { value: 'EXCLUDED',     label: '제외로 이동' },
+            { value: 'NEEDS_REVIEW', label: `${REVIEW_LABEL.NEEDS_REVIEW}로 이동` },
+            { value: 'IN_PROGRESS',  label: `${REVIEW_LABEL.IN_PROGRESS}으로 이동` },
+            { value: 'EXCLUDED',     label: `${REVIEW_LABEL.EXCLUDED}로 이동` },
           ]}
           onApply={handleBulk}
           onClear={clear}
@@ -393,9 +393,7 @@ function StatusTab({
   onChangeReview, onChangeReviewBulk, onOpenDetail, removingIds,
 }) {
   const { items, total, loading, filters, setFilters, loadMore, canLoadMore } = hook;
-  // 초기값: ['NEEDS_REVIEW'] (가장 자주 보는 화면)
   const statusValue = Array.isArray(filters.status) ? filters.status : [];
-  const hideExpired = !!filters.hide_expired;
 
   const [queryDraft, setQueryDraft] = useState(filters.q || '');
   useEffect(() => {
@@ -420,20 +418,11 @@ function StatusTab({
 
   // 다중 status 모드에선 한 가지 status 행만 보이는 게 아니므로 모든 옵션 노출.
   const bulkOptions = [
-    { value: 'UNREVIEWED',   label: '미검토로 되돌리기' },
-    { value: 'NEEDS_REVIEW', label: '검토 필요로 이동' },
-    { value: 'IN_PROGRESS',  label: '지원 진행으로 이동' },
-    { value: 'EXCLUDED',     label: '제외로 이동' },
+    { value: 'UNREVIEWED',   label: `${REVIEW_LABEL.UNREVIEWED}로 되돌리기` },
+    { value: 'NEEDS_REVIEW', label: `${REVIEW_LABEL.NEEDS_REVIEW}로 이동` },
+    { value: 'IN_PROGRESS',  label: `${REVIEW_LABEL.IN_PROGRESS}으로 이동` },
+    { value: 'EXCLUDED',     label: `${REVIEW_LABEL.EXCLUDED}로 이동` },
   ];
-
-  // 만료 자동 숨김 체크박스 표시 조건:
-  //   - 만료 영향 받는 status (NEEDS_REVIEW / IN_PROGRESS) 가 선택되었거나
-  //   - 아무 status 도 선택 안 됨 (전체)
-  //   - 단, EXPIRED 가 선택되어 있으면 이미 만료 행을 보여달라는 의도라 숨김.
-  const expirable = (statusValue.length === 0
-                  || statusValue.includes('NEEDS_REVIEW')
-                  || statusValue.includes('IN_PROGRESS'))
-                 && !statusValue.includes('EXPIRED');
 
   const domainValue = filters.domain || [];
 
@@ -441,7 +430,7 @@ function StatusTab({
     <div>
       <SectionHead
         title="검토 상태별 확인"
-        sub="검토 필요 · 지원 진행 · 제외 상태를 일괄 관리합니다"
+        sub="추가 검토 · 진행 · 제외 · 기간 만료 상태를 일괄 관리합니다"
       />
       <Toolbar>
         <Toolbar.Label>상태</Toolbar.Label>
@@ -450,10 +439,10 @@ function StatusTab({
           value={statusValue}
           onChange={(arr) => setFilters({ status: arr.length ? arr : undefined })}
           options={[
-            { value: 'NEEDS_REVIEW', label: '검토 필요', count: statusCounts.NEEDS_REVIEW },
-            { value: 'IN_PROGRESS',  label: '지원 진행', count: statusCounts.IN_PROGRESS },
-            { value: 'EXCLUDED',     label: '제외',     count: statusCounts.EXCLUDED },
-            { value: 'EXPIRED',      label: '기간 만료', count: statusCounts.EXPIRED },
+            { value: 'NEEDS_REVIEW', label: REVIEW_LABEL.NEEDS_REVIEW, count: statusCounts.NEEDS_REVIEW },
+            { value: 'IN_PROGRESS',  label: REVIEW_LABEL.IN_PROGRESS,  count: statusCounts.IN_PROGRESS },
+            { value: 'EXCLUDED',     label: REVIEW_LABEL.EXCLUDED,     count: statusCounts.EXCLUDED },
+            { value: 'EXPIRED',      label: '기간 만료',                count: statusCounts.EXPIRED },
           ]}
         />
         <Toolbar.Divider />
@@ -466,16 +455,6 @@ function StatusTab({
         />
         <Toolbar.Divider />
         <SearchPill value={queryDraft} onChange={setQueryDraft} placeholder="사업명 검색" />
-        <Toolbar.Spacer />
-        {expirable && (
-          <CheckboxRow
-            checked={hideExpired}
-            onChange={(v) => setFilters({ hide_expired: v })}
-            style={{ fontSize: 12, color: 'var(--steel)' }}
-          >
-            만료 자동 숨김 (§5.2)
-          </CheckboxRow>
-        )}
       </Toolbar>
 
       {selectedIds.size > 0 && (

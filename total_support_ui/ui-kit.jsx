@@ -40,8 +40,8 @@ const SITE_SUB = {
 };
 const REVIEW_LABEL = {
   UNREVIEWED:   '미검토',
-  NEEDS_REVIEW: '검토 필요',
-  IN_PROGRESS:  '지원 진행',
+  NEEDS_REVIEW: '추가 검토',
+  IN_PROGRESS:  '진행',
   EXCLUDED:     '제외',
 };
 const POSTING_STATUS_LABEL = {
