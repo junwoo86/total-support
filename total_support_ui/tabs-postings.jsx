@@ -31,15 +31,16 @@ function PostingsTable({
 
   return (
     <DataTable>
+      {/* 컬럼 폭: 체크3 / 사업명23 / 분야7(세로) / 적합도6 / 적합사유34 / 상태7 / D-Day11 / 내부검토9 */}
       <colgroup>
         <col style={{ width: '3%' }} />
         <col style={{ width: '23%' }} />
-        <col style={{ width: '10%' }} />
         <col style={{ width: '7%' }} />
-        <col style={{ width: '28%' }} />
+        <col style={{ width: '6%' }} />
+        <col style={{ width: '34%' }} />
         <col style={{ width: '7%' }} />
         <col style={{ width: '11%' }} />
-        <col style={{ width: '11%' }} />
+        <col style={{ width: '9%' }} />
       </colgroup>
       <thead>
         <tr>
