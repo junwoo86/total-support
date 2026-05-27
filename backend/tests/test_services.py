@@ -253,6 +253,27 @@ def test_postings_expired_count_equals_filtered_list_total():
         assert counts.EXPIRED == listed.total
 
 
+def test_postings_domain_none_returns_only_unmatched():
+    """domain=('NONE',) → assigned_fields 가 비어있는(미매칭) 행만."""
+    with SessionLocal() as db:
+        out = svc_postings.list_postings(
+            db, PostingFilter(domain=("NONE",), page_size=50)
+        )
+        for item in out.items:
+            assert not item.assigned_fields, item  # [] 또는 None
+
+
+def test_postings_domain_real_plus_none_is_union():
+    """domain=('AI','NONE') 총합 = AI 매칭 + 미매칭 (서로 겹치지 않음)."""
+    with SessionLocal() as db:
+        ai = svc_postings.list_postings(db, PostingFilter(domain=("AI",), page_size=1))
+        none = svc_postings.list_postings(db, PostingFilter(domain=("NONE",), page_size=1))
+        both = svc_postings.list_postings(
+            db, PostingFilter(domain=("AI", "NONE"), page_size=1)
+        )
+        assert both.total == ai.total + none.total
+
+
 def test_postings_unreviewed_with_hide_expired_excludes_expired_count():
     """UnreviewedTab 자동 적용: status=('UNREVIEWED',) + hide_expired=True
        = 백엔드 UNREVIEWED 전체 - EXPIRED."""

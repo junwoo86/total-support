@@ -153,9 +153,20 @@ def _apply_common_filters(stmt, f: PostingFilter):
         stmt = stmt.where(GrantPosting.source_site.in_(f.site))
     if f.domain:
         # assigned_fields 는 콤마 문자열 — 각 도메인 라벨 LIKE 의 OR 결합.
-        stmt = stmt.where(
-            or_(*[GrantPosting.assigned_fields.ilike(f"%{d}%") for d in f.domain])
-        )
+        # 'NONE' 가상 토큰: assigned_fields IS NULL OR '' (도메인 미매칭).
+        clauses = []
+        for d in f.domain:
+            if d == "NONE":
+                clauses.append(
+                    or_(
+                        GrantPosting.assigned_fields.is_(None),
+                        GrantPosting.assigned_fields == "",
+                    )
+                )
+            else:
+                clauses.append(GrantPosting.assigned_fields.ilike(f"%{d}%"))
+        if clauses:
+            stmt = stmt.where(or_(*clauses))
     if f.q:
         stmt = stmt.where(GrantPosting.title.ilike(f"%{f.q}%"))
     if f.relevance_buckets:
