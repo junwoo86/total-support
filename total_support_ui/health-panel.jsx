@@ -101,11 +101,16 @@ function HealthCard({ site, latest, lastOk, running: runningProp, elapsed, nowMs
   const status = running ? 'RUNNING' : (latest ? latest.status : 'OK');
   // 버튼 카운터(클라이언트 elapsed)가 없고 서버 RUNNING만 있는 경우엔
   // started_at으로 경과 시간 계산
-  const elapsedDisp = elapsed || (
-    running && latest && latest.started_at
-      ? Math.max(0, Math.floor((Date.now() - new Date(latest.started_at).getTime()) / 1000))
-      : 0
-  );
+  // 경과 시간: 클라이언트 카운터(elapsed)가 우선 (0초 포함 — falsy 문제 회피).
+  // 카운터가 없을 때만 server fallback 을 쓰되, **latest 가 실제 RUNNING run 일
+  // 때만** started_at 으로 계산한다. (옛 OK run 의 started_at 으로 계산하면
+  // 트리거 직후 3시간 전 시각 기준 12294s 같은 엉뚱한 값이 나옴 — 그 버그 수정.)
+  const elapsedDisp =
+    (typeof elapsed === 'number' && elapsed > 0)
+      ? elapsed
+      : (latest && latest.status === 'RUNNING' && latest.started_at
+          ? Math.max(0, Math.floor((Date.now() - new Date(latest.started_at).getTime()) / 1000))
+          : 0);
   const cardCls =
     status === 'WARN' ? 'warn' :
     status === 'FAIL' ? 'fail' :
