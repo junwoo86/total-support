@@ -64,7 +64,7 @@ function PostingsTable({
       </thead>
       <tbody>
         {rows.map(p => {
-          const d = p.end_date ? MOCK.dDay(p.end_date) : null;
+          const d = dDayOf(p);
           const isUrgent = p.end_date && d !== null && d <= 7 && d >= 0;
           const removing = removingIds.includes(p.id);
           const isSelected = selectedIds.has(p.id);
@@ -165,8 +165,8 @@ function sortByRelevance(a, b) {
     return bs - as;
   }
   if (a.ai_suitability !== b.ai_suitability) return a.ai_suitability === 'HIGH' ? -1 : 1;
-  const ad = a.end_date ? MOCK.dDay(a.end_date) : 999;
-  const bd = b.end_date ? MOCK.dDay(b.end_date) : 999;
+  const ad = a.end_date ? (dDayOf(a) ?? 999) : 999;
+  const bd = b.end_date ? (dDayOf(b) ?? 999) : 999;
   if (ad !== bd) return ad - bd;
   return new Date(b.first_seen_at) - new Date(a.first_seen_at);
 }
@@ -212,8 +212,8 @@ function UnreviewedTab({ hook, domains, onChangeReview, onChangeReviewBulk, onOp
   const visibleRows = useMemo(() => {
     if (!sortByDDay) return pg.pageItems;
     const sorted = [...pg.pageItems].sort((a, b) => {
-      const ad = a.end_date ? MOCK.dDay(a.end_date) : Infinity;
-      const bd = b.end_date ? MOCK.dDay(b.end_date) : Infinity;
+      const ad = a.end_date ? (dDayOf(a) ?? Infinity) : Infinity;
+      const bd = b.end_date ? (dDayOf(b) ?? Infinity) : Infinity;
       return ad - bd;
     });
     return sorted;

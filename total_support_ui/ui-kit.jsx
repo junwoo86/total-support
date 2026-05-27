@@ -478,10 +478,22 @@ function DomainFilterChips({ domains, value, onChange, multiSelect = false }) {
   return <ChipGroup value={value} onChange={onChange} options={opts} />;
 }
 
+/** posting → D-Day 정수.
+ * LIVE 모드는 백엔드가 한국 시간대 `(now() AT TIME ZONE 'Asia/Seoul')::date` 로
+ * 계산한 `posting.d_day` 를 그대로 사용 (시간 무관 · 날짜만). MOCK 모드는
+ * 시드 데이터의 고정 시각(MOCK.TODAY=2026-05-22)을 기준으로 계산하므로 일관성
+ * 유지를 위해 MOCK.dDay() 사용. end_date null 이면 null.
+ */
+function dDayOf(posting) {
+  if (!posting || !posting.end_date) return null;
+  if (typeof posting.d_day === 'number') return posting.d_day;
+  return MOCK.dDay(posting.end_date);
+}
+
 function DDayCell({ posting }) {
   const { end_date, raw_period, start_date } = posting;
   if (!end_date) return <span className="dday always" title={raw_period}>{raw_period}</span>;
-  const d = MOCK.dDay(end_date);
+  const d = dDayOf(posting);
   const isPassed = d < 0;
   const isUrgent = !isPassed && d <= 7;
   const cls = isPassed ? 'passed' : isUrgent ? 'urgent' : '';
@@ -500,9 +512,11 @@ function DDayCell({ posting }) {
 function PostingDetailModal({ posting, domains, open, onClose }) {
   if (!posting) return null;
   const isIRIS = posting.source_site === 'IRIS';
-  const ddayInfo = posting.end_date
-    ? `${posting.end_date} (${MOCK.dDay(posting.end_date) >= 0 ? `D-${MOCK.dDay(posting.end_date)}` : `D+${-MOCK.dDay(posting.end_date)}`})`
-    : posting.raw_period;
+  const ddayInfo = (() => {
+    if (!posting.end_date) return posting.raw_period;
+    const d = dDayOf(posting);
+    return `${posting.end_date} (${d >= 0 ? `D-${d}` : `D+${-d}`})`;
+  })();
   const openOriginal = () => window.open(posting.detail_url, '_blank', 'noopener');
   return (
     <Modal
@@ -704,7 +718,7 @@ Object.assign(window, {
   // overlays
   Modal, ConfirmModal,
   // domain helpers
-  DomainFilterChips, DDayCell,
+  DomainFilterChips, DDayCell, dDayOf,
   // composite
   PostingDetailModal, BulkBar,
   // pagination

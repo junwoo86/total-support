@@ -23,10 +23,13 @@ function HealthPanel({ runs, onTriggerRun, runningSites, runningCounters }) {
     return out;
   }, [runs]);
 
+  // stale 계산은 LIVE 면 실시간 기준, MOCK 이면 시드 고정 시각 기준.
+  const liveMode = window.API && window.API.LIVE_MODE;
+  const nowMs = liveMode ? Date.now() : MOCK.TODAY.getTime();
   const staleSites = ['BIZINFO', 'IRIS', 'SBA'].filter(s => {
     const ok = lastOkPerSite[s];
     if (!ok) return true;
-    const hrs = (MOCK.TODAY.getTime() - new Date(ok.started_at).getTime()) / 3600000;
+    const hrs = (nowMs - new Date(ok.started_at).getTime()) / 3600000;
     return hrs >= 36;
   });
 

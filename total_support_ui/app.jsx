@@ -24,7 +24,17 @@ function App() {
   const [removingIds, setRemovingIds] = useState([]);
 
   const toast = useToast();
-  const nowLabel = MOCK.fmtDateTime(MOCK.TODAY.toISOString());
+  // LIVE 모드: 한국 시간 실시간. MOCK: 시드 데이터 고정 시각(2026-05-22)으로
+  // mockdata 의 D-Day 와 일관성 유지.
+  const [nowTick, setNowTick] = useState(Date.now());
+  useEffect(() => {
+    if (!liveMode) return;
+    const t = setInterval(() => setNowTick(Date.now()), 60_000);  // 분당 1회
+    return () => clearInterval(t);
+  }, [liveMode]);
+  const nowLabel = liveMode
+    ? MOCK.fmtDateTime(new Date(nowTick).toISOString())
+    : MOCK.fmtDateTime(MOCK.TODAY.toISOString());
   const hasRunning = runningSites.length > 0;
 
   // ----- Effects & mutations (extracted to hooks.jsx) -----
