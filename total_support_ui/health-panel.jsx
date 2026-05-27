@@ -174,7 +174,7 @@ function HealthCard({ site, latest, lastOk, running: runningProp, elapsed, nowMs
             ? `이미 확인 중 (${elapsedDisp}s 경과)`
             : '마지막 수집 이후 새로 올라온 공고를 지금 확인합니다'}
         >
-          {running ? <>● 확인 중… ({elapsedDisp}s)</> : <>🔄 새 공고 확인</>}
+          {running ? <>● 확인 중… ({elapsedDisp}s)</> : <>새 공고 확인</>}
         </button>
       </div>
     </div>
