@@ -70,13 +70,18 @@ class PostingListResponse(BaseModel):
 class PostingStatusCounts(BaseModel):
     """검토 상태별 카운트 — StatusTab 탭/칩 옆 숫자 표시용.
 
-    domain/q/hide_expired 등 다른 필터가 함께 들어오면 그 필터를 적용한 뒤
-    상태별로 GROUP BY 한 결과. status 자체는 필터 X (4가지 모두 항상 반환).
+    domain/q 등 다른 필터가 함께 들어오면 그 필터를 적용한 뒤 상태별로
+    GROUP BY 한 결과. status / hide_expired 는 무시 (UI 칩은 항상 전체 분포).
+
+    EXPIRED 는 가상 status — UNREVIEWED 중 end_date < 한국 오늘 인 행 수.
+    UNREVIEWED 카운트와는 독립적으로 별도 집계되며, UI 가 필요한 대로
+    UNREVIEWED active = UNREVIEWED - EXPIRED 로 계산 가능.
     """
     UNREVIEWED: int = 0
     NEEDS_REVIEW: int = 0
     IN_PROGRESS: int = 0
     EXCLUDED: int = 0
+    EXPIRED: int = 0
 
 
 class ReviewStatusPatch(BaseModel):

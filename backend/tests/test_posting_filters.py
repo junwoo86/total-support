@@ -54,6 +54,12 @@ def test_posting_filter_accepts_multi_status_tuple():
     assert f.status == ("NEEDS_REVIEW", "EXCLUDED")
 
 
+def test_posting_filter_accepts_expired_virtual_status():
+    """'EXPIRED' 는 review_status enum 에 없는 가상 토큰 — services 가 SQL 로 해석."""
+    f = PostingFilter(status=("NEEDS_REVIEW", "EXPIRED"))
+    assert "EXPIRED" in f.status
+
+
 # ============================================================
 # _csv_tuple — 라우터의 다중값 쿼리 파라미터 파서
 # ============================================================

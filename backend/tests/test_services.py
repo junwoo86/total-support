@@ -230,6 +230,40 @@ def test_postings_status_counts_sums_match_individual_filtered_lists():
             )
 
 
+def test_postings_expired_virtual_status_returns_only_unreviewed_past_due():
+    """status=('EXPIRED',) → 모두 review_status=UNREVIEWED + end_date < 한국 오늘."""
+    from datetime import date, timezone, timedelta
+    today_kst = (date.fromtimestamp(__import__('time').time() + 9 * 3600))
+    with SessionLocal() as db:
+        out = svc_postings.list_postings(
+            db, PostingFilter(status=("EXPIRED",), page_size=50)
+        )
+        for item in out.items:
+            assert item.review_status == "UNREVIEWED", item
+            assert item.end_date is not None and item.end_date < today_kst, item
+
+
+def test_postings_expired_count_equals_filtered_list_total():
+    """counts.EXPIRED == list_postings(status=EXPIRED).total — 정의 일관성."""
+    with SessionLocal() as db:
+        counts = svc_postings.get_status_counts(db, PostingFilter())
+        listed = svc_postings.list_postings(
+            db, PostingFilter(status=("EXPIRED",), page_size=1)
+        )
+        assert counts.EXPIRED == listed.total
+
+
+def test_postings_unreviewed_with_hide_expired_excludes_expired_count():
+    """UnreviewedTab 자동 적용: status=('UNREVIEWED',) + hide_expired=True
+       = 백엔드 UNREVIEWED 전체 - EXPIRED."""
+    with SessionLocal() as db:
+        counts = svc_postings.get_status_counts(db, PostingFilter())
+        active = svc_postings.list_postings(
+            db, PostingFilter(status=("UNREVIEWED",), hide_expired=True, page_size=1)
+        )
+        assert active.total == counts.UNREVIEWED - counts.EXPIRED
+
+
 # ============================================================
 # logs 서비스 — 단순 조회 계약
 # ============================================================

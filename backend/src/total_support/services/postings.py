@@ -94,6 +94,57 @@ class PostingFilter:
     page_size: int = 50
 
 
+def _expired_unreviewed_clause():
+    """UNREVIEWED 상태에서 마감일이 한국 오늘 이전인 행 — '기간 만료' 가상 status."""
+    return and_(
+        GrantPosting.review_status == "UNREVIEWED",
+        GrantPosting.end_date.is_not(None),
+        GrantPosting.end_date < seoul_today_expr(),
+    )
+
+
+def _apply_status_filter(stmt, status_tuple: tuple[str, ...]):
+    """status 다중값에 'EXPIRED' 가상 토큰을 포함할 수 있게 처리.
+
+    - 'EXPIRED' 만 있으면: UNREVIEWED + end_date < today
+    - 'EXPIRED' + 다른 status: 둘을 OR 결합
+    - 'EXPIRED' 없으면: 기존처럼 review_status.in_(...) 만
+    DB 의 review_status 컬럼은 'UNREVIEWED' 그대로 유지 — 'EXPIRED' 는 derived.
+    """
+    if not status_tuple:
+        return stmt
+    regular = tuple(s for s in status_tuple if s != "EXPIRED")
+    has_expired = "EXPIRED" in status_tuple
+    clauses = []
+    if regular:
+        clauses.append(GrantPosting.review_status.in_(regular))
+    if has_expired:
+        clauses.append(_expired_unreviewed_clause())
+    if clauses:
+        stmt = stmt.where(or_(*clauses))
+    return stmt
+
+
+def _apply_hide_expired(stmt, f: PostingFilter):
+    """hide_expired=true 면 (status 가 expirable 과 교차할 때) 만료 제외.
+
+    expirable: UNREVIEWED / NEEDS_REVIEW / IN_PROGRESS — 검토 액션이 의미 있는 상태.
+    'EXPIRED' 토큰이 status 에 명시되어 있으면 그것 자체가 만료 행을 보여달라는
+    의도이므로 hide_expired 적용 안 함 (모순 방지).
+    """
+    if not f.hide_expired:
+        return stmt
+    if "EXPIRED" in f.status:
+        return stmt
+    expirable = {"UNREVIEWED", "NEEDS_REVIEW", "IN_PROGRESS"}
+    if f.status and not any(s in expirable for s in f.status):
+        return stmt
+    return stmt.where(
+        (GrantPosting.end_date.is_(None))
+        | (GrantPosting.end_date >= seoul_today_expr())
+    )
+
+
 def _apply_common_filters(stmt, f: PostingFilter):
     """list_postings / counts 가 공유하는 필터 적용. status 는 호출자가 별도 처리."""
     if f.suitability:
@@ -129,23 +180,15 @@ def _apply_common_filters(stmt, f: PostingFilter):
 # 목록
 # ============================================================
 def list_postings(db: Session, f: PostingFilter) -> PostingListResponse:
-    """PRD §5.2: '검토 필요' / '지원 진행' + hide_expired=True 시
-    end_date < 오늘 항목 제외 (end_date NULL 인 상시는 항상 노출).
+    """PRD §5.2: '검토 필요' / '지원 진행' (+ UNREVIEWED) + hide_expired=True 시
+    end_date < 오늘 항목 제외. end_date NULL 인 상시는 항상 노출.
+    status='EXPIRED' 가상 토큰: review_status=UNREVIEWED AND 마감일 < 오늘.
     """
     stmt = select(GrantPosting, dday_expr(GrantPosting.end_date).label("d_day"))
 
-    if f.status:
-        stmt = stmt.where(GrantPosting.review_status.in_(f.status))
+    stmt = _apply_status_filter(stmt, f.status)
     stmt = _apply_common_filters(stmt, f)
-
-    # hide_expired 는 status 가 NEEDS_REVIEW / IN_PROGRESS 와만 교차하는 항목에
-    # 의미가 있음. 다중 status 면 그중 하나라도 있으면 적용.
-    expirable = {"NEEDS_REVIEW", "IN_PROGRESS"}
-    if f.hide_expired and (not f.status or any(s in expirable for s in f.status)):
-        stmt = stmt.where(
-            (GrantPosting.end_date.is_(None))
-            | (GrantPosting.end_date >= seoul_today_expr())
-        )
+    stmt = _apply_hide_expired(stmt, f)
 
     total = db.execute(
         select(func.count()).select_from(stmt.subquery())
@@ -177,28 +220,34 @@ def list_postings(db: Session, f: PostingFilter) -> PostingListResponse:
 # 검토 상태별 카운트
 # ============================================================
 def get_status_counts(db: Session, f: PostingFilter) -> PostingStatusCounts:
-    """status 필드를 제외한 같은 필터로 GROUP BY review_status — 4개 모두 반환.
+    """4개 review_status 카운트 + EXPIRED 가상 카운트 별도 반환.
 
-    StatusTab 의 탭 옆 합산 카운트 + 칩별 카운트 표시에 사용. domain/q/
-    hide_expired 등 다른 필터가 함께 들어오면 그 조건 하에서의 분포를 보여줌.
-    f.status 와 f.page/page_size 는 무시.
+    StatusTab 의 탭 옆 합산 카운트 + 칩별 카운트 표시에 사용. domain/q 등 다른
+    필터가 함께 들어오면 그 조건 하에서의 분포를 보여줌. f.status 와 f.page/
+    page_size 와 f.hide_expired 는 무시 (UI 칩 카운트는 항상 전체 분포).
+
+    EXPIRED = UNREVIEWED 중 end_date < 오늘 인 행 수. UNREVIEWED 카운트와는
+    독립 — UI 가 필요한 대로 합산/차감 가능 (UNREVIEWED active = UNREVIEWED -
+    EXPIRED).
     """
-    base = select(
-        GrantPosting.review_status,
-        func.count().label("c"),
-    )
-    base = _apply_common_filters(base, f)
-    if f.hide_expired:
-        base = base.where(
-            (GrantPosting.end_date.is_(None))
-            | (GrantPosting.end_date >= seoul_today_expr())
-        )
-    base = base.group_by(GrantPosting.review_status)
+    base_filter = _apply_common_filters(select(GrantPosting.id), f)
 
+    # 1) review_status 별 카운트 (4가지 모두)
+    grp_stmt = select(GrantPosting.review_status, func.count().label("c"))
+    grp_stmt = _apply_common_filters(grp_stmt, f)
+    grp_stmt = grp_stmt.group_by(GrantPosting.review_status)
     counts = PostingStatusCounts()
-    for status, c in db.execute(base).all():
+    for status, c in db.execute(grp_stmt).all():
         if hasattr(counts, status):
             setattr(counts, status, int(c))
+
+    # 2) EXPIRED 가상 카운트 — 같은 공통 필터 + UNREVIEWED + end_date < 오늘
+    exp_stmt = select(func.count()).select_from(
+        _apply_common_filters(
+            select(GrantPosting).where(_expired_unreviewed_clause()), f
+        ).subquery()
+    )
+    counts.EXPIRED = int(db.execute(exp_stmt).scalar_one() or 0)
     return counts
 
 

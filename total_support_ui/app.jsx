@@ -50,16 +50,19 @@ function App() {
   // - status 는 다중 선택 가능 → 항상 배열로 보냄.
   // - StatusTab 초기값: 빈 배열 (= 검토 필요 + 지원 진행 + 제외 모두 노출),
   //   3가지가 합쳐진 큰 그림을 먼저 보여준 뒤 사용자가 칩으로 좁히도록.
+  // 미검토 탭: 검토 액션이 의미 있는 행만 — 마감 지난 UNREVIEWED 는 hide_expired
+  // 로 자동 숨김. 그 행들은 StatusTab 의 '기간 만료' 칩으로 모이게 된다.
   const unreviewedHook = usePaginatedPostings({
     liveMode,
-    initialFilters: { status: ['UNREVIEWED'] },
+    initialFilters: { status: ['UNREVIEWED'], hide_expired: true },
     mockItems: postings.filter(p => p.review_status === 'UNREVIEWED'),
   });
+  // 상태별 탭: 검토 필요 / 지원 진행 / 제외 + 기간 만료(가상 — UNREVIEWED 중
+  // end_date < 한국 오늘) 모두 초기 노출. 사용자가 칩으로 좁힘.
   const statusHook = usePaginatedPostings({
     liveMode,
     initialFilters: {
-      status: ['NEEDS_REVIEW', 'IN_PROGRESS', 'EXCLUDED'],
-      hide_expired: true,
+      status: ['NEEDS_REVIEW', 'IN_PROGRESS', 'EXCLUDED', 'EXPIRED'],
     },
     mockItems: postings.filter(p => p.review_status !== 'UNREVIEWED'),
   });
@@ -103,8 +106,10 @@ function App() {
     unreviewed: liveMode
       ? unreviewedHook.total
       : postings.filter(p => p.review_status === 'UNREVIEWED').length,
+    // 검토 상태별 탭 합산: 검토 필요 + 지원 진행 + 제외 + 기간 만료 (가상).
     status: liveMode
-      ? (statusCounts.NEEDS_REVIEW + statusCounts.IN_PROGRESS + statusCounts.EXCLUDED)
+      ? (statusCounts.NEEDS_REVIEW + statusCounts.IN_PROGRESS
+         + statusCounts.EXCLUDED + statusCounts.EXPIRED)
       : postings.filter(p => p.review_status !== 'UNREVIEWED').length,
     logs: logs.length,
   }), [liveMode, unreviewedHook.total, statusCounts, postings, logs]);

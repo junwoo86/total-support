@@ -241,10 +241,10 @@ function UnreviewedTab({ hook, domains, onChangeReview, onChangeReviewBulk, onOp
           value={bucketsValue}
           onChange={(arr) => setFilters({ relevance_bucket: arr.length ? arr : undefined })}
           options={[
-            { value: 'high',     label: '상 (80%↑)' },
-            { value: 'mid_high', label: '중상 (60%↑)' },
-            { value: 'mid',      label: '중 (40%↑)' },
-            { value: 'low',      label: '하 (40%↓)' },
+            { value: 'high',     label: '상 (80~100)' },
+            { value: 'mid_high', label: '중상 (60~80)' },
+            { value: 'mid',      label: '중 (40~60)' },
+            { value: 'low',      label: '하 (0~40)' },
           ]}
         />
         <Toolbar.Divider />
@@ -370,9 +370,14 @@ function StatusTab({
     { value: 'EXCLUDED',     label: '제외로 이동' },
   ];
 
-  const expirable = statusValue.includes('NEEDS_REVIEW')
-                 || statusValue.includes('IN_PROGRESS')
-                 || statusValue.length === 0;
+  // 만료 자동 숨김 체크박스 표시 조건:
+  //   - 만료 영향 받는 status (NEEDS_REVIEW / IN_PROGRESS) 가 선택되었거나
+  //   - 아무 status 도 선택 안 됨 (전체)
+  //   - 단, EXPIRED 가 선택되어 있으면 이미 만료 행을 보여달라는 의도라 숨김.
+  const expirable = (statusValue.length === 0
+                  || statusValue.includes('NEEDS_REVIEW')
+                  || statusValue.includes('IN_PROGRESS'))
+                 && !statusValue.includes('EXPIRED');
 
   const domainValue = filters.domain || [];
 
@@ -392,6 +397,7 @@ function StatusTab({
             { value: 'NEEDS_REVIEW', label: '검토 필요', count: statusCounts.NEEDS_REVIEW },
             { value: 'IN_PROGRESS',  label: '지원 진행', count: statusCounts.IN_PROGRESS },
             { value: 'EXCLUDED',     label: '제외',     count: statusCounts.EXCLUDED },
+            { value: 'EXPIRED',      label: '기간 만료', count: statusCounts.EXPIRED },
           ]}
         />
         <Toolbar.Divider />
