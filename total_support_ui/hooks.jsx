@@ -205,7 +205,20 @@ function useEvaluateMissing({ liveMode, toast, onComplete }) {
       .catch(e => toast(`재평가 트리거 실패: ${e.message}`, 'error'));
   };
 
-  return { count, running, progress, trigger, refreshCount };
+  const cancel = () => {
+    if (!liveMode) return;
+    window.API.cancelEvaluateMissing()
+      .then(res => {
+        if (res.cancelled) {
+          toast('재평가 중지 요청됨 — 현재 건 처리 후 멈춥니다', 'warn');
+        } else {
+          toast(res.reason || '중지할 작업이 없습니다', 'warn');
+        }
+      })
+      .catch(e => toast(`중지 실패: ${e.message}`, 'error'));
+  };
+
+  return { count, running, progress, trigger, cancel, refreshCount };
 }
 
 /* -- 1. LIVE 모드 초기 부트스트랩 ----------------------------- */

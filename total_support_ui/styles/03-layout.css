@@ -160,6 +160,16 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+.chip.reeval-cancel {
+  border-color: var(--coral, #ef4444);
+  color: var(--coral, #ef4444);
+  font-weight: 600;
+  padding: 4px 12px;
+}
+.chip.reeval-cancel:hover {
+  background: var(--coral, #ef4444);
+  color: #fff;
+}
 
 /* ============================================================
  * Toolbar (filter row)

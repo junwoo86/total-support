@@ -239,6 +239,7 @@ function UnreviewedTab({ hook, domains, onChangeReview, onChangeReviewBulk, onOp
             running={reeval.running}
             progress={reeval.progress}
             onTrigger={reeval.trigger}
+            onCancel={reeval.cancel}
           />
         )}
       />
@@ -317,7 +318,7 @@ function UnreviewedTab({ hook, domains, onChangeReview, onChangeReviewBulk, onOp
  * "적합도가 비어있는" = UNREVIEWED + 미만료 + (점수 NULL or 분석실패).
  * 여러 사용자가 동시에 눌러도 백엔드 thread+advisory lock 으로 1개만 실행.
  * 진행 중이면 processed/total 프로그레스바 + "N/M (실패 K)" 표시. */
-function ReevalButton({ count, running, progress, onTrigger }) {
+function ReevalButton({ count, running, progress, onTrigger, onCancel }) {
   const disabled = running || count === 0;
   const pct = progress && progress.total > 0
     ? Math.round((progress.processed / progress.total) * 100)
@@ -333,6 +334,13 @@ function ReevalButton({ count, running, progress, onTrigger }) {
           재평가 {progress.processed}/{progress.total}
           {progress.failed > 0 ? ` (실패 ${progress.failed})` : ''}
         </span>
+        <button
+          className="chip reeval-cancel"
+          onClick={onCancel}
+          title="재평가 중지 (현재 처리 중인 1건은 마치고 멈춤)"
+        >
+          중지
+        </button>
       </div>
     );
   }

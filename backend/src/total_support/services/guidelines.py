@@ -137,9 +137,23 @@ _FILL_PROGRESS: dict = {
     "processed": 0,
     "updated": 0,
     "failed": 0,
+    "cancelled": False,
     "started_at": None,
     "finished_at": None,
 }
+# 사용자 중지 요청 플래그 — _run_fill_missing 루프가 매 건마다 확인.
+_CANCEL_EVENT = threading.Event()
+
+
+def request_cancel_fill_missing() -> dict:
+    """진행 중인 재평가 중지 요청. 현재 처리 중인 1건은 마치고 멈춘다.
+
+    Returns: {cancelled: bool, reason: str|None}
+    """
+    if not (_BACKFILL_THREAD is not None and _BACKFILL_THREAD.is_alive()):
+        return {"cancelled": False, "reason": "진행 중인 재평가가 없습니다"}
+    _CANCEL_EVENT.set()
+    return {"cancelled": True, "reason": None}
 
 
 def get_fill_progress() -> dict:
@@ -291,14 +305,22 @@ def _run_fill_missing() -> None:
                           failed=0, finished_at=datetime.now(timezone.utc).isoformat())
             return
         logger.info("fill-missing: evaluating %d unevaluated UNREVIEWED postings", len(rows))
+        _CANCEL_EVENT.clear()  # 이번 실행의 중지 플래그 초기화
         _set_progress(
             running=True, total=len(rows), processed=0, updated=0, failed=0,
+            cancelled=False,
             started_at=datetime.now(timezone.utc).isoformat(), finished_at=None,
         )
 
         updated = 0
         failed = 0
+        cancelled = False
         for pid, site, title, html in rows:
+            if _CANCEL_EVENT.is_set():
+                cancelled = True
+                logger.info("fill-missing cancelled by user at %d/%d",
+                            updated + failed, len(rows))
+                break
             trimmed = _trim_body_html(site, html or "")
             body = _strip_tags_for_match(trimmed or "")
             result = evaluator.evaluate(
@@ -335,10 +357,12 @@ def _run_fill_missing() -> None:
                 db.commit()
             # 매 건 처리 후 진행 상태 갱신 (프론트 프로그레스바가 폴링)
             _set_progress(processed=updated + failed, updated=updated, failed=failed)
-        logger.info("fill-missing done — updated=%d failed=%d / total=%d",
-                    updated, failed, len(rows))
+        logger.info("fill-missing %s — updated=%d failed=%d / total=%d",
+                    "cancelled" if cancelled else "done", updated, failed, len(rows))
+        _set_progress(cancelled=cancelled)
     finally:
         _set_progress(running=False, finished_at=datetime.now(timezone.utc).isoformat())
+        _CANCEL_EVENT.clear()
         lock_conn.close()  # session-level advisory lock 자동 해제
 
 

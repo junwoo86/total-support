@@ -128,6 +128,10 @@
     async getEvaluateMissingStatus() {
       return jget('/api/grant/postings/evaluate-missing/status');
     },
+    /** 진행 중인 재평가 중지 요청. {cancelled, reason}. */
+    async cancelEvaluateMissing() {
+      return jsend('POST', '/api/grant/postings/evaluate-missing/cancel');
+    },
     async getPostingDetail(id) {
       return jget(`/api/grant/postings/${id}/detail`);
     },

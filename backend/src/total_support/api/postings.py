@@ -127,6 +127,14 @@ def evaluate_missing_trigger() -> dict:
     return gsvc.trigger_fill_missing_async()
 
 
+@router.post("/evaluate-missing/cancel")
+def evaluate_missing_cancel() -> dict:
+    """진행 중인 재평가 중지 요청. {cancelled, reason}."""
+    from total_support.services import guidelines as gsvc
+
+    return gsvc.request_cancel_fill_missing()
+
+
 @router.get("/evaluate-missing/status")
 def evaluate_missing_status() -> dict:
     """재평가 진행 상태 — 프론트 프로그레스바 폴링.
