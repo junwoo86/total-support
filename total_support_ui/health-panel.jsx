@@ -35,6 +35,13 @@ function HealthPanel({ runs, onTriggerRun, runningSites, runningCounters }) {
 
   return (
     <>
+      <div className="health-intro">
+        <span className="health-intro-icon">📡</span>
+        <span>
+          세 사이트(<b>기업마당 · IRIS · SBA</b>)에서 <b>마지막 수집 이후 새로 올라온 공고</b>를
+          확인해 가져옵니다. 매일 새벽 04:00 자동 실행되며, 아래 버튼으로 지금 즉시 확인할 수도 있습니다.
+        </span>
+      </div>
       <div className="health-strip">
         {['BIZINFO', 'IRIS', 'SBA'].map(site => (
           <HealthCard
@@ -44,6 +51,7 @@ function HealthPanel({ runs, onTriggerRun, runningSites, runningCounters }) {
             lastOk={lastOkPerSite[site]}
             running={runningSites.includes(site)}
             elapsed={runningCounters[site] || 0}
+            nowMs={nowMs}
             onTrigger={() => onTriggerRun(site)}
           />
         ))}
@@ -61,7 +69,18 @@ function HealthPanel({ runs, onTriggerRun, runningSites, runningCounters }) {
   );
 }
 
-function HealthCard({ site, latest, lastOk, running: runningProp, elapsed, onTrigger }) {
+/* nowMs 기준 상대시간 — LIVE 면 실제 now, MOCK 이면 시드 TODAY 기준
+ * (mockdata.relTime 은 시나리오 앵커 로직이라 LIVE 부정확 → 자체 계산). */
+function relTimeFrom(iso, nowMs) {
+  if (!iso) return '—';
+  const v = Math.max(0, (nowMs - new Date(iso).getTime()) / 1000);
+  if (v < 60) return '방금 전';
+  if (v < 3600) return `${Math.floor(v / 60)}분 전`;
+  if (v < 86400) return `${Math.floor(v / 3600)}시간 전`;
+  return `${Math.floor(v / 86400)}일 전`;
+}
+
+function HealthCard({ site, latest, lastOk, running: runningProp, elapsed, nowMs, onTrigger }) {
   // 서버가 보는 latest.status === 'RUNNING'이면 클라이언트 flag 무관하게
   // 버튼/카드 상태를 RUNNING으로 결합한다 (race condition + 다른 사용자 트리거 대응).
   const running = runningProp || (latest && latest.status === 'RUNNING');
@@ -92,26 +111,43 @@ function HealthCard({ site, latest, lastOk, running: runningProp, elapsed, onTri
     status === 'FAIL' ? 'fail' :
     status === 'RUNNING' ? 'running' : '';
 
-  let resultText = '—';
-  let okText = '—';
-  if (lastOk) okText = MOCK.fmtDateTime(lastOk.finished_at || lastOk.started_at);
+  // "최근 확인" = 마지막 시도 시각 (성공/실패 무관). 상대시간 + 절대시각 툴팁.
+  const checkedRel = latest ? relTimeFrom(latest.started_at, nowMs) : '아직 없음';
+  const checkedAbs = latest ? MOCK.fmtDateTime(latest.started_at) : '';
+
+  // "지난 결과" — 신규 공고 유무를 한국어로 의미부여.
+  let resultText = '아직 수집한 적 없음';
+  let resultTone = 'neutral';   // neutral | good | warn | fail
+  let resultTitle = '';
   if (running) {
-    // LIVE 모드: 30초 헬스 폴링이 가져온 latest_run에서 page/new 누적을 노출.
-    // base.py가 매 페이지 후 incremental update하므로 분 단위로 갱신됨.
     if (latest && latest.status === 'RUNNING' && (latest.pages_visited || latest.new_records)) {
-      resultText = `진행 중 — 페이지 ${latest.pages_visited || 0} · 신규 ${latest.new_records || 0}건`;
+      resultText = `확인 중… 새 공고 ${latest.new_records || 0}건 (페이지 ${latest.pages_visited || 0})`;
     } else {
-      resultText = '수집 진행 중...';
+      resultText = '새 공고 확인 중…';
     }
   } else if (latest) {
     if (latest.status === 'OK') {
-      resultText = `신규 ${latest.new_records}건 · 갱신 ${latest.updated_records}건 · 소요 ${(latest.duration_ms / 1000).toFixed(1)}초`;
+      const n = latest.new_records || 0;
+      if (n > 0) {
+        resultText = `새 공고 ${n}건 수집됨`;
+        resultTone = 'good';
+      } else {
+        resultText = '새 공고 없음 (최신 상태)';
+        resultTone = 'neutral';
+      }
+      resultTitle = `신규 ${n}건 · 갱신 ${latest.updated_records || 0}건 · 소요 ${(latest.duration_ms / 1000).toFixed(1)}초`;
     } else if (latest.status === 'WARN') {
-      resultText = latest.error_message || '일부 행 파싱 예외';
+      resultText = latest.error_message || '일부 공고 파싱 경고';
+      resultTone = 'warn';
     } else if (latest.status === 'FAIL') {
-      resultText = latest.error_message || '수집 실패';
+      resultText = latest.error_message || '수집 실패 — 점검 필요';
+      resultTone = 'fail';
     }
   }
+  const resultColor =
+    resultTone === 'fail' ? 'var(--coral)' :
+    resultTone === 'warn' ? 'var(--warning-text)' :
+    resultTone === 'good' ? 'var(--success-text, #15803d)' : 'var(--ink)';
 
   return (
     <div className={`health-card ${cardCls}`}>
@@ -123,8 +159,10 @@ function HealthCard({ site, latest, lastOk, running: runningProp, elapsed, onTri
         <RunStatusBadge value={status} />
       </div>
       <div className="health-card-meta">
-        <span className="k">마지막 OK</span><span className="v">{okText}</span>
-        <span className="k">최근 결과</span><span className="v" style={{ color: status === 'FAIL' ? 'var(--coral)' : status === 'WARN' ? 'var(--warning-text)' : 'var(--ink)' }}>{resultText}</span>
+        <span className="k">최근 확인</span>
+        <span className="v" title={checkedAbs}>{checkedRel}</span>
+        <span className="k">지난 결과</span>
+        <span className="v" style={{ color: resultColor }} title={resultTitle}>{resultText}</span>
       </div>
       <div className="run-bar">
         <span className="last-run">{latest ? `마지막 시도 ${MOCK.fmtDateTime(latest.started_at)}` : '\u00A0'}</span>
@@ -132,9 +170,11 @@ function HealthCard({ site, latest, lastOk, running: runningProp, elapsed, onTri
           className={`run-btn ${running ? 'running' : ''} ${flashCls}`}
           disabled={running}
           onClick={onTrigger}
-          title={running ? `이미 수집 중 (${elapsedDisp}s 경과)` : '지금 즉시 수집'}
+          title={running
+            ? `이미 확인 중 (${elapsedDisp}s 경과)`
+            : '마지막 수집 이후 새로 올라온 공고를 지금 확인합니다'}
         >
-          {running ? <>● 수집 중... ({elapsedDisp}s)</> : <>▶ 지금 실행</>}
+          {running ? <>● 확인 중… ({elapsedDisp}s)</> : <>🔄 새 공고 확인</>}
         </button>
       </div>
     </div>
